@@ -1,4 +1,3 @@
-
 import express from 'express';
 import http from 'http';
 import { Server, Socket } from 'socket.io';
@@ -27,8 +26,10 @@ let playerQueue: Player[] = [];
 // The player who is currently playing
 let activePlayer: Player | null = null;
 // Holds the NodeJS.Timeout instance for the current round
-// FIX: Use ReturnType<typeof setTimeout> to correctly type the timer object from setTimeout in Node.js.
 let roundTimer: ReturnType<typeof setTimeout> | null = null;
+// Holds the socket for the single Unreal Engine game client
+let gameClientSocket: Socket | null = null;
+
 
 // --- CORE FUNCTIONS ---
 
@@ -63,7 +64,9 @@ const endRound = () => {
   } else {
     console.log("Queue is empty. Waiting for new players.");
     // Notify Unreal Engine that no one is playing
-    io.emit('waitingForPlayers');
+    if (gameClientSocket) {
+      gameClientSocket.emit('waitingForPlayers');
+    }
   }
 };
 
@@ -79,7 +82,9 @@ const startRound = (player: Player) => {
   // Notify the player's client that it's their turn
   io.to(player.id).emit('yourTurn');
   // Notify Unreal Engine about the new player
-  io.emit('roundStart', { playerName: player.name });
+  if (gameClientSocket) {
+    gameClientSocket.emit('roundStart', { playerName: player.name });
+  }
 
   // Set a timer for the round duration
   roundTimer = setTimeout(endRound, ROUND_DURATION_MS);
@@ -88,10 +93,45 @@ const startRound = (player: Player) => {
 
 // --- SOCKET.IO EVENT HANDLING ---
 io.on('connection', (socket: Socket) => {
-  console.log(`New user connected: ${socket.id}`);
+  console.log(`New client connected: ${socket.id}. Waiting for registration.`);
+
+  // Event: Client identifies itself
+  socket.on('register', ({ client_type }: { client_type: 'game_client' | 'web_controller' }) => {
+    if (client_type === 'game_client') {
+      if (gameClientSocket) {
+        console.warn(`A game client tried to connect (${socket.id}), but one is already registered (${gameClientSocket.id}). Disconnecting new client.`);
+        socket.disconnect();
+        return;
+      }
+      gameClientSocket = socket;
+      console.log(`Unreal Engine game client registered: ${socket.id}`);
+
+      // Listen for game-initiated round end events
+      socket.on('roundOverByGame', () => {
+        if (socket.id === gameClientSocket?.id) {
+            console.log("Received 'roundOverByGame' from game client. Ending round.");
+            endRound();
+        }
+      });
+
+      // If no one is playing, notify the new game client immediately.
+      if (!activePlayer) {
+        gameClientSocket.emit('waitingForPlayers');
+      }
+
+    } else if (client_type === 'web_controller') {
+      console.log(`Web controller registered: ${socket.id}`);
+    } else {
+      console.log(`Client ${socket.id} sent unknown client_type '${client_type}'. Disconnecting.`);
+      socket.disconnect();
+    }
+  });
 
   // Event: Player joins the game
   socket.on('joinGame', ({ playerName }: { playerName: string }) => {
+    // Ensure the game client cannot join the player queue
+    if (socket.id === gameClientSocket?.id) return;
+
     const newPlayer: Player = { id: socket.id, name: playerName };
     console.log(`Player ${playerName} (${socket.id}) wants to join.`);
 
@@ -111,11 +151,10 @@ io.on('connection', (socket: Socket) => {
   socket.on('move', (data: { direction: 'left' | 'right', action: 'start' | 'stop' }) => {
     // SECURITY: Ensure the person sending the move command is the active player.
     if (activePlayer && socket.id === activePlayer.id) {
-      // Valid move, broadcast it to the Unreal Engine client
-      io.emit('gameAction', data);
-    } else {
-      // This can happen if a move event arrives after the player's turn has ended.
-      // We can safely ignore it.
+      // Valid move, send it ONLY to the Unreal Engine client
+      if (gameClientSocket) {
+        gameClientSocket.emit('gameAction', data);
+      }
     }
   });
 
@@ -128,10 +167,23 @@ io.on('connection', (socket: Socket) => {
     }
   });
 
-  // Event: Player disconnects
+  // Event: Client disconnects
   socket.on('disconnect', () => {
-    console.log(`User disconnected: ${socket.id}`);
+    console.log(`Client disconnected: ${socket.id}`);
 
+    // Check if the disconnected client was the game client
+    if (gameClientSocket && socket.id === gameClientSocket.id) {
+        console.log("Unreal Engine game client has disconnected.");
+        gameClientSocket = null;
+        // Optional: End the current round if the game disconnects
+        if(activePlayer) {
+          console.log("Ending current round because game client disconnected.");
+          endRound();
+        }
+        return; // No further action needed
+    }
+
+    // If it wasn't the game client, it's a player.
     // If the disconnected player was the active one, end the round.
     if (activePlayer && socket.id === activePlayer.id) {
       console.log(`Active player ${activePlayer.name} disconnected. Ending round.`);
@@ -154,6 +206,4 @@ io.on('connection', (socket: Socket) => {
 // --- START SERVER ---
 server.listen(PORT, () => {
   console.log(`🚀 Server is running on http://localhost:${PORT}`);
-  // Initial state for Unreal Engine on server start
-  io.emit('waitingForPlayers');
 });
