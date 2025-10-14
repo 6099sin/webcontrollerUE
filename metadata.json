@@ -1,0 +1,5 @@
+{
+  "name": "Unreal Engine Web Controller",
+  "description": "A web-based controller for an Unreal Engine game using Socket.IO. Users can set their player name and control movement with left/right arrows.",
+  "requestFramePermissions": []
+}
