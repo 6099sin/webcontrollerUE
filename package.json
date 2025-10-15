@@ -5,6 +5,7 @@
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc",
+    "build:ui": "vite build",
     "start": "node dist/server.js",
     "dev": "nodemon",
     "dev:ui": "vite"

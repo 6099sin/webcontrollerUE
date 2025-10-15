@@ -1,7 +1,8 @@
+# Node dependencies
 node_modules
-src
+
+# Git folder
 .git
-Dockerfile
-.dockerignore
-nodemon.json
-tsconfig.json
+
+# Local environment files
+.env*.local

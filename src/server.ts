@@ -1,9 +1,19 @@
 import express from 'express';
 import http from 'http';
 import { Server, Socket } from 'socket.io';
+import path from 'path';
 
 // --- APPLICATION SETUP ---
 const app = express();
+
+// Serve the static files from the React app
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Handles any requests that don't match the ones above
+app.get('*', (req,res) =>{
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {

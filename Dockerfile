@@ -1,20 +1,41 @@
-# 1. Start with a base Node.js image
-FROM node:18-slim
+# ---- Stage 1: Build the Frontend ----
+FROM node:20-slim AS ui-builder
 
-# 2. Set the working directory inside the container
 WORKDIR /usr/src/app
 
-# 3. Copy package.json and package-lock.json
 COPY package*.json ./
+RUN npm install
 
-# 4. Install production dependencies
-RUN npm install --only=production
-
-# 5. Copy the rest of your application code (including the 'dist' folder)
 COPY . .
 
-# 6. Expose the port your server runs on
+RUN npm run build:ui
+
+
+# ---- Stage 2: Build the Backend ----
+FROM node:20-slim AS server-builder
+
+WORKDIR /usr/src/app
+
+COPY package*.json ./
+RUN npm install
+
+COPY . .
+
+RUN npm run build
+
+
+# ---- Stage 3: Create the Final Production Image ----
+FROM node:20-slim AS production
+
+WORKDIR /usr/src/app
+
+COPY package*.json ./
+RUN npm install --only=production
+
+COPY --from=server-builder /usr/src/app/dist ./dist
+
+COPY --from=ui-builder /usr/src/app/dist ./dist/public
+
 EXPOSE 3001
 
-# 7. The command to run your application
 CMD [ "node", "dist/server.js" ]
