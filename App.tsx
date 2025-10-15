@@ -133,6 +133,7 @@ function App() {
     socket.current.on('connect', () => {
       console.log('Connected to server!');
       setIsConnected(true);
+      socket.current?.emit('register', { client_type: 'web_controller' });
     });
 
     socket.current.on('disconnect', () => {
