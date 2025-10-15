@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { GameState } from './types';
 import { LeftArrowIcon, RightArrowIcon } from './components/icons';
@@ -56,6 +55,9 @@ interface ControllerScreenProps {
 }
 
 const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName, onEndGame }) => {
+  const [queuePosition, setQueuePosition] = useState<number | null>(null);
+  const [queueTotal, setQueueTotal] = useState<number | null>(null);
+
   const handleMoveStart = (direction: 'left' | 'right') => {
     socket?.emit('move', { direction, action: 'start' });
   };
@@ -64,10 +66,57 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName,
     socket?.emit('move', { direction, action: 'stop' });
   };
 
+  useEffect(() => {
+    if (!socket) {
+      // Clear UI if socket is gone
+      setQueuePosition(null);
+      setQueueTotal(null);
+      return;
+    }
+
+    const onQueueUpdate = (data: { position: number; total: number }) => {
+      setQueuePosition(data.position);
+      setQueueTotal(data.total);
+    };
+
+    const onYourTurn = () => {
+      // Active player; represent as position 0
+      setQueuePosition(0);
+      setQueueTotal(prev => prev ?? 0);
+    };
+
+    const onGameOver = () => {
+      // Clear queue info when game ends
+      setQueuePosition(null);
+      setQueueTotal(null);
+    };
+
+    socket.on('queueUpdate', onQueueUpdate);
+    socket.on('yourTurn', onYourTurn);
+    socket.on('gameOver', onGameOver);
+
+    return () => {
+      socket.off('queueUpdate', onQueueUpdate);
+      socket.off('yourTurn', onYourTurn);
+      socket.off('gameOver', onGameOver);
+    };
+  }, [socket]);
+
+  const isQueued = queuePosition === null || queuePosition > 0;
+
   return (
-    <div className="flex flex-col h-full p-4">
+    <div className="relative flex flex-col h-full p-4"> {/* made relative to anchor overlay */}
       <header className="flex justify-between items-center mb-4">
-        <h2 className="text-2xl font-semibold text-cyan-400">{playerName}</h2>
+        <div className="flex flex-col">
+          <h2 className="text-2xl font-semibold text-cyan-400">{playerName}</h2>
+          {queuePosition !== null && (
+            queuePosition === 0 ? (
+              <span className="text-sm text-green-300">Your turn</span>
+            ) : (
+              <span className="text-sm text-gray-400">Queue: {queuePosition}/{queueTotal}</span>
+            )
+          )}
+        </div>
         <button
           onClick={onEndGame}
           className="px-4 py-2 text-sm font-bold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
@@ -75,26 +124,42 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName,
           End Game
         </button>
       </header>
+
       <main className="flex-grow flex items-center justify-around gap-4">
         <button
+          disabled={isQueued}
           onMouseDown={() => handleMoveStart('left')}
           onMouseUp={() => handleMoveEnd('left')}
           onTouchStart={() => handleMoveStart('left')}
           onTouchEnd={() => handleMoveEnd('left')}
-          className="flex-1 h-full flex items-center justify-center bg-gray-800 border-2 border-gray-700 rounded-2xl active:bg-cyan-700 active:border-cyan-500 transition-all duration-100 select-none"
+          className="flex-1 h-full flex items-center justify-center bg-gray-800 border-2 border-gray-700 rounded-2xl active:bg-cyan-700 active:border-cyan-500 transition-all duration-100 select-none disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <LeftArrowIcon />
         </button>
         <button
+          disabled={isQueued}
           onMouseDown={() => handleMoveStart('right')}
           onMouseUp={() => handleMoveEnd('right')}
           onTouchStart={() => handleMoveStart('right')}
           onTouchEnd={() => handleMoveEnd('right')}
-          className="flex-1 h-full flex items-center justify-center bg-gray-800 border-2 border-gray-700 rounded-2xl active:bg-cyan-700 active:border-cyan-500 transition-all duration-100 select-none"
+          className="flex-1 h-full flex items-center justify-center bg-gray-800 border-2 border-gray-700 rounded-2xl active:bg-cyan-700 active:border-cyan-500 transition-all duration-100 select-none disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <RightArrowIcon />
         </button>
       </main>
+
+      {isQueued && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60 z-20">
+          <div className="bg-gray-800 bg-opacity-90 text-center px-6 py-4 rounded-lg border border-gray-700">
+            {queuePosition === null ? (
+              <JoiningDots />
+            ) : (
+              <div className="text-lg font-semibold text-white">Position: {queuePosition} of {queueTotal}</div>
+            )}
+            <div className="text-sm text-gray-400 mt-2">Waiting for your turn</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -106,7 +171,7 @@ interface EndScreenProps {
 const EndScreen: React.FC<EndScreenProps> = ({ onPlayAgain }) => {
   return (
     <div className="flex flex-col items-center justify-center h-full p-4 text-center">
-      <h1 className="text-6xl font-bold mb-4 text-red-500">Game Over</h1>
+      <h1 className="text-6xl font-bold mb-4 text-red-500">Out of time</h1>
       <p className="text-xl text-gray-400 mb-8">Thanks for playing!</p>
       <button
         onClick={onPlayAgain}
@@ -116,6 +181,21 @@ const EndScreen: React.FC<EndScreenProps> = ({ onPlayAgain }) => {
       </button>
     </div>
   );
+};
+
+// Insert animated "Joining" dots component
+const JoiningDots: React.FC<{ baseText?: string; intervalMs?: number }> = ({ baseText = 'Joining', intervalMs = 500 }) => {
+  const [dots, setDots] = useState('');
+  useEffect(() => {
+    const frames = ['', '.', '..', '...'];
+    let idx = 0;
+    const id = setInterval(() => {
+      idx = (idx + 1) % frames.length;
+      setDots(frames[idx]);
+    }, intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+  return <div className="text-lg font-semibold text-white">{baseText}{dots}</div>;
 };
 
 // --- Main App Component ---
