@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -21,6 +20,24 @@
   }
 }
 </script>
+<style>
+  @keyframes position-update-animation {
+    0% {
+      opacity: 0;
+      transform: translateY(0.75rem);
+    }
+    50% {
+      opacity: 1;
+      transform: translateY(-0.25rem);
+    }
+    100% {
+      transform: translateY(0);
+    }
+  }
+  .animate-position-update {
+    animation: position-update-animation 0.5s ease-out;
+  }
+</style>
 </head>
   <body class="bg-gray-900 text-white">
     <div id="root"></div>

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { GameState } from './types';
 import { LeftArrowIcon, RightArrowIcon } from './components/icons';
@@ -53,44 +52,88 @@ interface ControllerScreenProps {
   socket: Socket | null;
   playerName: string;
   onEndGame: () => void;
+  isMyTurn: boolean;
+  queueInfo: { position: number; total: number } | null;
 }
 
-const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName, onEndGame }) => {
+const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName, onEndGame, isMyTurn, queueInfo }) => {
+  const [animatePosition, setAnimatePosition] = useState(false);
+  const prevPositionRef = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    if (queueInfo && prevPositionRef.current !== undefined) {
+      if (queueInfo.position < prevPositionRef.current) {
+        setAnimatePosition(true);
+        const timer = setTimeout(() => {
+          setAnimatePosition(false);
+        }, 500); // Animation duration
+        return () => clearTimeout(timer);
+      }
+    }
+    prevPositionRef.current = queueInfo?.position;
+  }, [queueInfo]);
+  
   const handleMoveStart = (direction: 'left' | 'right') => {
+    if (!isMyTurn) return;
     socket?.emit('move', { direction, action: 'start' });
   };
 
   const handleMoveEnd = (direction: 'left' | 'right') => {
+    if (!isMyTurn) return;
     socket?.emit('move', { direction, action: 'stop' });
   };
 
+  const buttonBaseClasses = "flex-1 h-full flex items-center justify-center border-2 rounded-2xl transition-all duration-100 select-none";
+  const activeButtonClasses = "bg-gray-800 border-gray-700 hover:bg-gray-700 active:bg-cyan-600 active:border-cyan-400 active:scale-95 active:ring-4 active:ring-cyan-500/50";
+  const inactiveButtonClasses = "bg-gray-800 border-gray-700 opacity-30 cursor-not-allowed";
+
   return (
     <div className="flex flex-col h-full p-4">
-      <header className="flex justify-between items-center mb-4">
+      <header className="flex justify-between items-center mb-4 min-h-[40px]">
         <h2 className="text-2xl font-semibold text-cyan-400">{playerName}</h2>
-        <button
-          onClick={onEndGame}
-          className="px-4 py-2 text-sm font-bold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
-        >
-          End Game
-        </button>
+        {isMyTurn && (
+          <button
+            onClick={onEndGame}
+            className="px-4 py-2 text-sm font-bold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+          >
+            End Game
+          </button>
+        )}
       </header>
-      <main className="flex-grow flex items-center justify-around gap-4">
+      <main className="flex-grow flex items-center justify-around gap-4 relative">
+        {!isMyTurn && (
+          <div className="absolute inset-0 bg-gray-900 bg-opacity-80 flex flex-col items-center justify-center z-10 rounded-2xl p-4 text-center">
+            {queueInfo ? (
+              <>
+                <h3 className="text-4xl font-bold mb-2 text-cyan-400">In Queue</h3>
+                <p className="text-2xl">
+                  Position: <span className={`font-bold text-white inline-block ${animatePosition ? 'animate-position-update' : ''}`}>{queueInfo.position}</span> of {queueInfo.total}
+                </p>
+              </>
+            ) : (
+              <h3 className="text-4xl font-bold text-cyan-400 animate-pulse">Joining...</h3>
+            )}
+          </div>
+        )}
         <button
+          disabled={!isMyTurn}
           onMouseDown={() => handleMoveStart('left')}
           onMouseUp={() => handleMoveEnd('left')}
           onTouchStart={() => handleMoveStart('left')}
           onTouchEnd={() => handleMoveEnd('left')}
-          className="flex-1 h-full flex items-center justify-center bg-gray-800 border-2 border-gray-700 rounded-2xl active:bg-cyan-700 active:border-cyan-500 transition-all duration-100 select-none"
+          className={`${buttonBaseClasses} ${isMyTurn ? activeButtonClasses : inactiveButtonClasses}`}
+          aria-disabled={!isMyTurn}
         >
           <LeftArrowIcon />
         </button>
         <button
+          disabled={!isMyTurn}
           onMouseDown={() => handleMoveStart('right')}
           onMouseUp={() => handleMoveEnd('right')}
           onTouchStart={() => handleMoveStart('right')}
           onTouchEnd={() => handleMoveEnd('right')}
-          className="flex-1 h-full flex items-center justify-center bg-gray-800 border-2 border-gray-700 rounded-2xl active:bg-cyan-700 active:border-cyan-500 transition-all duration-100 select-none"
+          className={`${buttonBaseClasses} ${isMyTurn ? activeButtonClasses : inactiveButtonClasses}`}
+          aria-disabled={!isMyTurn}
         >
           <RightArrowIcon />
         </button>
@@ -98,6 +141,7 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName,
     </div>
   );
 };
+
 
 interface EndScreenProps {
   onPlayAgain: () => void;
@@ -124,6 +168,8 @@ function App() {
   const [gameState, setGameState] = useState<GameState>(GameState.SETUP);
   const [playerName, setPlayerName] = useState<string>('');
   const [isConnected, setIsConnected] = useState<boolean>(false);
+  const [isMyTurn, setIsMyTurn] = useState<boolean>(false);
+  const [queueInfo, setQueueInfo] = useState<{ position: number; total: number } | null>(null);
   const socket = useRef<Socket | null>(null);
 
   useEffect(() => {
@@ -148,6 +194,21 @@ function App() {
         setGameState(GameState.ENDGAME);
     });
 
+    // Listen for queue updates
+    socket.current.on('queueUpdate', (data: { position: number; total: number }) => {
+      console.log('Queue update received:', data);
+      setQueueInfo(data);
+      setIsMyTurn(false);
+    });
+
+    // Listen for turn start
+    socket.current.on('yourTurn', () => {
+      console.log("It's my turn!");
+      setIsMyTurn(true);
+      setQueueInfo(null);
+    });
+
+
     // Cleanup on component unmount
     return () => {
       if (socket.current) {
@@ -158,6 +219,8 @@ function App() {
 
   const handleJoin = useCallback((name: string) => {
     setPlayerName(name);
+    setIsMyTurn(false);
+    setQueueInfo(null);
     setGameState(GameState.CONTROLLER);
     socket.current?.emit('joinGame', { playerName: name });
   }, []);
@@ -165,10 +228,14 @@ function App() {
   const handleEndGame = useCallback(() => {
     setGameState(GameState.ENDGAME);
     socket.current?.emit('endGame', { playerName });
+    setIsMyTurn(false);
+    setQueueInfo(null);
   }, [playerName]);
 
   const handlePlayAgain = useCallback(() => {
     setPlayerName('');
+    setIsMyTurn(false);
+    setQueueInfo(null);
     setGameState(GameState.SETUP);
   }, []);
 
@@ -177,7 +244,13 @@ function App() {
       case GameState.SETUP:
         return <SetupScreen onJoin={handleJoin} />;
       case GameState.CONTROLLER:
-        return <ControllerScreen socket={socket.current} playerName={playerName} onEndGame={handleEndGame} />;
+        return <ControllerScreen 
+          socket={socket.current} 
+          playerName={playerName} 
+          onEndGame={handleEndGame}
+          isMyTurn={isMyTurn}
+          queueInfo={queueInfo}
+        />;
       case GameState.ENDGAME:
         return <EndScreen onPlayAgain={handlePlayAgain} />;
       default:

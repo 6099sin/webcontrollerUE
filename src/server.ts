@@ -90,6 +90,22 @@ const startRound = (player: Player) => {
   roundTimer = setTimeout(endRound, ROUND_DURATION_MS);
 };
 
+/**
+ * Removes a player from the queue by their socket ID and notifies remaining players.
+ * @param socketId The socket ID of the player to remove.
+ */
+const removePlayerFromQueue = (socketId: string) => {
+  const queueIndex = playerQueue.findIndex(p => p.id === socketId);
+  if (queueIndex !== -1) {
+    const removedPlayer = playerQueue.splice(queueIndex, 1)[0];
+    console.log(`Removed ${removedPlayer.name} from the queue.`);
+    // Update remaining players in the queue about their new position
+    playerQueue.forEach((player, index) => {
+        io.to(player.id).emit('queueUpdate', { position: index + 1, total: playerQueue.length });
+    });
+  }
+};
+
 
 // --- SOCKET.IO EVENT HANDLING ---
 io.on('connection', (socket: Socket) => {
@@ -190,15 +206,7 @@ io.on('connection', (socket: Socket) => {
       endRound();
     } else {
       // If the player was in the queue, remove them.
-      const queueIndex = playerQueue.findIndex(p => p.id === socket.id);
-      if (queueIndex !== -1) {
-        const removedPlayer = playerQueue.splice(queueIndex, 1)[0];
-        console.log(`Removed ${removedPlayer.name} from the queue due to disconnect.`);
-         // Update remaining players in the queue about their new position
-        playerQueue.forEach((player, index) => {
-            io.to(player.id).emit('queueUpdate', { position: index + 1, total: playerQueue.length });
-        });
-      }
+      removePlayerFromQueue(socket.id);
     }
   });
 });
