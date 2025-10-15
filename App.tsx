@@ -127,13 +127,16 @@ function App() {
   const socket = useRef<Socket | null>(null);
 
   useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionId = urlParams.get('sessionId');
+
     // Connect to Socket.IO server
     socket.current = io(SOCKET_SERVER_URL);
 
     socket.current.on('connect', () => {
       console.log('Connected to server!');
       setIsConnected(true);
-      socket.current?.emit('register', { client_type: 'web_controller' });
+      socket.current?.emit('register', { client_type: 'web_controller', sessionId: sessionId });
     });
 
     socket.current.on('disconnect', () => {
