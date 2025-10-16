@@ -24,6 +24,7 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 3001;
 const ROUND_DURATION_MS = 30000; // 30 seconds per round
+const PREPARE_DURATION_MS = 3000; // 3 seconds to prepare
 
 // --- STATE MANAGEMENT ---
 interface Player {
@@ -70,8 +71,8 @@ const endRound = () => {
   // Check if there are players waiting in the queue
   if (playerQueue.length > 0) {
     const nextPlayer = playerQueue.shift()!; // Get the next player from the front
-    console.log(`Next player is ${nextPlayer.name}. Starting their round.`);
-    startRound(nextPlayer);
+    console.log(`Next player is ${nextPlayer.name}. Preparing their round.`);
+    prepareRound(nextPlayer);
 
     // Update remaining players in the queue about their new position
     playerQueue.forEach((player, index) => {
@@ -88,6 +89,22 @@ const endRound = () => {
 };
 
 /**
+ * Prepares a player for their round with a countdown.
+ * @param player The player to prepare.
+ */
+const prepareRound = (player: Player) => {
+  console.log(`Player ${player.name} is preparing to play.`);
+  
+  // Notify the player to get ready
+  io.to(player.id).emit('prepareToPlay', { duration: PREPARE_DURATION_MS });
+
+  // After the preparation time, start the actual round
+  setTimeout(() => {
+    startRound(player);
+  }, PREPARE_DURATION_MS);
+};
+
+/**
  * Starts a new round for the given player.
  * @param player The player whose turn it is.
  */
@@ -95,7 +112,7 @@ const startRound = (player: Player) => {
   activePlayer = player;
   roundEndTime = Date.now() + ROUND_DURATION_MS;
   
-  console.log(`Starting round for ${player.name}. Inactivity timeout: ${ROUND_DURATION_MS / 1000}s`);
+  console.log(`Starting round for ${player.name}. Duration: ${ROUND_DURATION_MS / 1000}s`);
 
   // Notify the player's client that it's their turn
   io.to(player.id).emit('yourTurn');
@@ -171,11 +188,11 @@ io.on('connection', (socket: Socket) => {
     const newPlayer: Player = { id: socket.id, name: playerName, score: 0 };
     console.log(`Player ${playerName} (${socket.id}) wants to join.`);
 
-    if (!activePlayer) {
-      // If no one is playing, this player starts immediately.
-      startRound(newPlayer);
+    if (!activePlayer && playerQueue.length === 0) {
+      // If no one is playing and no one is in queue, this player starts (after preparing).
+      prepareRound(newPlayer);
     } else {
-      // If someone is playing, add to the queue.
+      // If someone is playing or in queue, add to the queue.
       playerQueue.push(newPlayer);
       console.log(`${playerName} added to queue. Position: ${playerQueue.length}`);
       // Send an update to the player about their queue position.
@@ -187,14 +204,6 @@ io.on('connection', (socket: Socket) => {
   socket.on('move', (data: { direction: 'left' | 'right', action: 'start' | 'stop' }) => {
     // SECURITY: Ensure the person sending the move command is the active player.
     if (activePlayer && socket.id === activePlayer.id) {
-
-      // Reset the inactivity timer since the player is active.
-      if (roundTimer) {
-        clearTimeout(roundTimer);
-      }
-      roundTimer = setTimeout(endRound, ROUND_DURATION_MS);
-      roundEndTime = Date.now() + ROUND_DURATION_MS;
-
       // Valid move, send it ONLY to the Unreal Engine client
       if (gameClientSocket) {
         gameClientSocket.emit('gameAction', data);

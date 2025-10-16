@@ -7,7 +7,7 @@ import type { Socket } from 'socket.io-client';
 declare const io: (uri: string) => Socket;
 
 //const SOCKET_SERVER_URL = 'https://ue-web-controller-536009461785.asia-southeast1.run.app';
-const SOCKET_SERVER_URL = 'http://localhost:3000/';
+const SOCKET_SERVER_URL = 'http://localhost:3001';
 
 // --- Helper Components (defined outside App to prevent re-rendering issues) ---
 
@@ -59,6 +59,7 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName 
   const [queueTotal, setQueueTotal] = useState<number | null>(null);
   const [score, setScore] = useState(0);
   const [remainingTime, setRemainingTime] = useState(0);
+  const [prepareTime, setPrepareTime] = useState<number | null>(null);
 
   const handleMoveStart = (direction: 'left' | 'right') => {
     socket?.emit('move', { direction, action: 'start' });
@@ -67,6 +68,15 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName 
   const handleMoveEnd = (direction: 'left' | 'right') => {
     socket?.emit('move', { direction, action: 'stop' });
   };
+
+  useEffect(() => {
+    if (prepareTime && prepareTime > 0) {
+        const timer = setTimeout(() => {
+            setPrepareTime(prepareTime - 1000);
+        }, 1000);
+        return () => clearTimeout(timer);
+    }
+}, [prepareTime]);
 
   useEffect(() => {
     if (!socket) {
@@ -83,8 +93,13 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName 
       setQueueTotal(data.total);
     };
 
+    const onPrepareToPlay = (data: { duration: number }) => {
+      setQueuePosition(null); // Hide queue overlay
+      setPrepareTime(data.duration);
+    };
+
     const onYourTurn = () => {
-      // Active player; represent as position 0
+      setPrepareTime(null);
       setQueuePosition(0);
       setQueueTotal(prev => prev ?? 0);
       setScore(0);
@@ -102,11 +117,11 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName 
     };
 
     const onTimeUpdate = (data: { remaining: number }) => {
-      console.log('timeUpdate received:', data.remaining);
       setRemainingTime(data.remaining);
     };
 
     socket.on('queueUpdate', onQueueUpdate);
+    socket.on('prepareToPlay', onPrepareToPlay);
     socket.on('yourTurn', onYourTurn);
     socket.on('gameOver', onGameOver);
     socket.on('scoreUpdate', onScoreUpdate);
@@ -114,6 +129,7 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName 
 
     return () => {
       socket.off('queueUpdate', onQueueUpdate);
+      socket.off('prepareToPlay', onPrepareToPlay);
       socket.off('yourTurn', onYourTurn);
       socket.off('gameOver', onGameOver);
       socket.off('scoreUpdate', onScoreUpdate);
@@ -171,7 +187,7 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName 
         </button>
       </main>
 
-      {isQueued && (
+      {isQueued && prepareTime === null && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60 z-20">
           <div className="bg-gray-800 bg-opacity-90 text-center px-6 py-4 rounded-lg border border-gray-700">
             {queuePosition === null ? (
@@ -180,6 +196,15 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName 
               <div className="text-lg font-semibold text-white">{queuePosition - 1} queues left</div>
             )}
             <div className="text-sm text-gray-400 mt-2">Waiting for your turn</div>
+          </div>
+        </div>
+      )}
+
+      {prepareTime !== null && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70 z-30">
+          <div className="text-center">
+            <p className="text-2xl text-gray-300 mb-2">Get Ready!</p>
+            <p className="text-8xl font-bold text-white">{Math.ceil(prepareTime / 1000)}</p>
           </div>
         </div>
       )}
