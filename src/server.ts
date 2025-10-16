@@ -29,6 +29,7 @@ const ROUND_DURATION_MS = 30000; // 30 seconds per round
 interface Player {
   id: string; // The socket ID
   name: string;
+  score: number;
 }
 
 // Queue for players waiting for their turn
@@ -53,9 +54,9 @@ const endRound = () => {
   }
 
   if (activePlayer) {
-    console.log(`Round ended for ${activePlayer.name}.`);
+    console.log(`Round ended for ${activePlayer.name}. Final score: ${activePlayer.score}`);
     // Notify the player's client that their game is over
-    io.to(activePlayer.id).emit('gameOver');
+    io.to(activePlayer.id).emit('gameOver', { finalScore: activePlayer.score });
   }
   
   activePlayer = null;
@@ -124,6 +125,15 @@ io.on('connection', (socket: Socket) => {
         }
       });
 
+      // Listen for score updates from the game client
+      socket.on('updateScore', (data: { score: number }) => {
+        if (socket.id === gameClientSocket?.id && activePlayer) {
+          activePlayer.score = data.score;
+          // Forward the score to the active player's web controller
+          io.to(activePlayer.id).emit('scoreUpdate', { score: data.score });
+        }
+      });
+
       // If no one is playing, notify the new game client immediately.
       if (!activePlayer) {
         gameClientSocket.emit('waitingForPlayers');
@@ -142,7 +152,7 @@ io.on('connection', (socket: Socket) => {
     // Ensure the game client cannot join the player queue
     if (socket.id === gameClientSocket?.id) return;
 
-    const newPlayer: Player = { id: socket.id, name: playerName };
+    const newPlayer: Player = { id: socket.id, name: playerName, score: 0 };
     console.log(`Player ${playerName} (${socket.id}) wants to join.`);
 
     if (!activePlayer) {

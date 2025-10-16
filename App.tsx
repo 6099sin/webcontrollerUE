@@ -26,20 +26,20 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onJoin }) => {
 
   return (
     <div className="flex flex-col items-center justify-center h-full p-4">
-      <h1 className="text-5xl font-bold mb-8 text-cyan-400">Unreal Controller</h1>
+      <h1 className="text-5xl font-bold mb-8 text-pink-400">Kitty Controller</h1>
       <form onSubmit={handleSubmit} className="w-full max-w-sm">
         <input
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Enter Your Player Name"
-          className="w-full px-4 py-3 mb-4 text-lg text-white bg-gray-800 border-2 border-gray-700 rounded-lg focus:outline-none focus:border-cyan-500 transition-colors"
+          className="w-full px-4 py-3 mb-4 text-lg text-white bg-gray-800 border-2 border-gray-700 rounded-lg focus:outline-none focus:border-pink-500 transition-colors"
           autoFocus
         />
         <button
           type="submit"
           disabled={!name.trim()}
-          className="w-full px-4 py-3 text-lg font-bold text-white bg-cyan-600 rounded-lg hover:bg-cyan-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
+          className="w-full px-4 py-3 text-lg font-bold text-white bg-pink-600 rounded-lg hover:bg-pink-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
         >
           Join Game
         </button>
@@ -57,6 +57,7 @@ interface ControllerScreenProps {
 const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName, onEndGame }) => {
   const [queuePosition, setQueuePosition] = useState<number | null>(null);
   const [queueTotal, setQueueTotal] = useState<number | null>(null);
+  const [score, setScore] = useState(0);
 
   const handleMoveStart = (direction: 'left' | 'right') => {
     socket?.emit('move', { direction, action: 'start' });
@@ -71,6 +72,7 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName,
       // Clear UI if socket is gone
       setQueuePosition(null);
       setQueueTotal(null);
+      setScore(0);
       return;
     }
 
@@ -83,6 +85,7 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName,
       // Active player; represent as position 0
       setQueuePosition(0);
       setQueueTotal(prev => prev ?? 0);
+      setScore(0);
     };
 
     const onGameOver = () => {
@@ -91,14 +94,20 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName,
       setQueueTotal(null);
     };
 
+    const onScoreUpdate = (data: { score: number }) => {
+      setScore(data.score);
+    };
+
     socket.on('queueUpdate', onQueueUpdate);
     socket.on('yourTurn', onYourTurn);
     socket.on('gameOver', onGameOver);
+    socket.on('scoreUpdate', onScoreUpdate);
 
     return () => {
       socket.off('queueUpdate', onQueueUpdate);
       socket.off('yourTurn', onYourTurn);
       socket.off('gameOver', onGameOver);
+      socket.off('scoreUpdate', onScoreUpdate);
     };
   }, [socket]);
 
@@ -108,18 +117,23 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName,
     <div className="relative flex flex-col h-full p-4"> {/* made relative to anchor overlay */}
       <header className="flex justify-between items-center mb-4">
         <div className="flex flex-col">
-          <h2 className="text-2xl font-semibold text-cyan-400">{playerName}</h2>
+          <h2 className="text-2xl font-semibold text-pink-400">{playerName}</h2>
           {queuePosition !== null && (
             queuePosition === 0 ? (
-              <span className="text-sm text-green-300">Your turn</span>
+              <span className="text-sm text-teal-300">Your turn</span>
             ) : (
-              <span className="text-sm text-gray-400">Queue: {queuePosition}/{queueTotal}</span>
+              <span className="text-sm text-gray-400">{queuePosition - 1} queues left</span>
             )
           )}
         </div>
+        {queuePosition === 0 && (
+          <div className="text-2xl font-bold text-white">
+            Score: {score}
+          </div>
+        )}
         <button
           onClick={onEndGame}
-          className="px-4 py-2 text-sm font-bold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+          className="px-4 py-2 text-sm font-bold text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors"
         >
           End Game
         </button>
@@ -132,7 +146,7 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName,
           onMouseUp={() => handleMoveEnd('left')}
           onTouchStart={() => handleMoveStart('left')}
           onTouchEnd={() => handleMoveEnd('left')}
-          className="flex-1 h-full flex items-center justify-center bg-gray-800 border-2 border-gray-700 rounded-2xl active:bg-cyan-700 active:border-cyan-500 transition-all duration-100 select-none disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 h-full flex items-center justify-center bg-gray-800 border-2 border-gray-700 rounded-2xl active:bg-pink-700 active:border-pink-500 transition-all duration-100 select-none disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <LeftArrowIcon />
         </button>
@@ -142,7 +156,7 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName,
           onMouseUp={() => handleMoveEnd('right')}
           onTouchStart={() => handleMoveStart('right')}
           onTouchEnd={() => handleMoveEnd('right')}
-          className="flex-1 h-full flex items-center justify-center bg-gray-800 border-2 border-gray-700 rounded-2xl active:bg-cyan-700 active:border-cyan-500 transition-all duration-100 select-none disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 h-full flex items-center justify-center bg-gray-800 border-2 border-gray-700 rounded-2xl active:bg-pink-700 active:border-pink-500 transition-all duration-100 select-none disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <RightArrowIcon />
         </button>
@@ -154,7 +168,7 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName,
             {queuePosition === null ? (
               <JoiningDots />
             ) : (
-              <div className="text-lg font-semibold text-white">Position: {queuePosition} of {queueTotal}</div>
+              <div className="text-lg font-semibold text-white">{queuePosition - 1} queues left</div>
             )}
             <div className="text-sm text-gray-400 mt-2">Waiting for your turn</div>
           </div>
@@ -166,16 +180,18 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName,
 
 interface EndScreenProps {
   onPlayAgain: () => void;
+  finalScore: number;
 }
 
-const EndScreen: React.FC<EndScreenProps> = ({ onPlayAgain }) => {
+const EndScreen: React.FC<EndScreenProps> = ({ onPlayAgain, finalScore }) => {
   return (
     <div className="flex flex-col items-center justify-center h-full p-4 text-center">
-      <h1 className="text-6xl font-bold mb-4 text-red-500">Out of time</h1>
+      <h1 className="text-6xl font-bold mb-4 text-purple-500">Nap time!</h1>
+      <p className="text-2xl text-white mb-4">Your score: {finalScore}</p>
       <p className="text-xl text-gray-400 mb-8">Thanks for playing!</p>
       <button
         onClick={onPlayAgain}
-        className="px-8 py-4 text-xl font-bold text-white bg-cyan-600 rounded-lg hover:bg-cyan-700 transition-colors"
+        className="px-8 py-4 text-xl font-bold text-white bg-pink-600 rounded-lg hover:bg-pink-700 transition-colors"
       >
         Play Again
       </button>
@@ -205,6 +221,7 @@ function App() {
   const [playerName, setPlayerName] = useState<string>('');
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const socket = useRef<Socket | null>(null);
+  const [finalScore, setFinalScore] = useState(0);
 
   useEffect(() => {
     // Connect to Socket.IO server
@@ -223,8 +240,9 @@ function App() {
     });
 
     // Listen for server-initiated game over
-    socket.current.on('gameOver', () => {
-        console.log('Game over signal received from server.');
+    socket.current.on('gameOver', (data: { finalScore: number }) => {
+        console.log(`Game over signal received from server. Final score: ${data.finalScore}`);
+        setFinalScore(data.finalScore);
         setGameState(GameState.ENDGAME);
     });
 
@@ -249,6 +267,7 @@ function App() {
 
   const handlePlayAgain = useCallback(() => {
     setPlayerName('');
+    setFinalScore(0);
     setGameState(GameState.SETUP);
   }, []);
 
@@ -259,7 +278,7 @@ function App() {
       case GameState.CONTROLLER:
         return <ControllerScreen socket={socket.current} playerName={playerName} onEndGame={handleEndGame} />;
       case GameState.ENDGAME:
-        return <EndScreen onPlayAgain={handlePlayAgain} />;
+        return <EndScreen onPlayAgain={handlePlayAgain} finalScore={finalScore} />;
       default:
         return <SetupScreen onJoin={handleJoin} />;
     }
@@ -271,7 +290,7 @@ function App() {
             <span className="text-xs text-gray-500">
                 {isConnected ? 'Connected' : 'Disconnected'}
             </span>
-            <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+            <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-teal-500' : 'bg-purple-500'}`}></div>
         </div>
       {renderContent()}
     </div>
