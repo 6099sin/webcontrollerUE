@@ -40,6 +40,8 @@ let activePlayer: Player | null = null;
 let roundTimer: ReturnType<typeof setTimeout> | null = null;
 // Holds the socket for the single Unreal Engine game client
 let gameClientSocket: Socket | null = null;
+let countdownTimer: ReturnType<typeof setInterval> | null = null;
+let roundEndTime: number = 0;
 
 
 // --- CORE FUNCTIONS ---
@@ -51,6 +53,10 @@ const endRound = () => {
   if (roundTimer) {
     clearTimeout(roundTimer);
     roundTimer = null;
+  }
+  if (countdownTimer) {
+    clearInterval(countdownTimer);
+    countdownTimer = null;
   }
 
   if (activePlayer) {
@@ -87,8 +93,9 @@ const endRound = () => {
  */
 const startRound = (player: Player) => {
   activePlayer = player;
+  roundEndTime = Date.now() + ROUND_DURATION_MS;
   
-  console.log(`Starting round for ${player.name}. Duration: ${ROUND_DURATION_MS / 1000}s`);
+  console.log(`Starting round for ${player.name}. Inactivity timeout: ${ROUND_DURATION_MS / 1000}s`);
 
   // Notify the player's client that it's their turn
   io.to(player.id).emit('yourTurn');
@@ -99,6 +106,15 @@ const startRound = (player: Player) => {
 
   // Set a timer for the round duration
   roundTimer = setTimeout(endRound, ROUND_DURATION_MS);
+
+  // Start a timer to send time updates
+  if (countdownTimer) clearInterval(countdownTimer);
+  countdownTimer = setInterval(() => {
+    const remaining = Math.max(0, roundEndTime - Date.now());
+    if (activePlayer) {
+      io.to(activePlayer.id).emit('timeUpdate', { remaining });
+    }
+  }, 1000);
 };
 
 
@@ -171,6 +187,14 @@ io.on('connection', (socket: Socket) => {
   socket.on('move', (data: { direction: 'left' | 'right', action: 'start' | 'stop' }) => {
     // SECURITY: Ensure the person sending the move command is the active player.
     if (activePlayer && socket.id === activePlayer.id) {
+
+      // Reset the inactivity timer since the player is active.
+      if (roundTimer) {
+        clearTimeout(roundTimer);
+      }
+      roundTimer = setTimeout(endRound, ROUND_DURATION_MS);
+      roundEndTime = Date.now() + ROUND_DURATION_MS;
+
       // Valid move, send it ONLY to the Unreal Engine client
       if (gameClientSocket) {
         gameClientSocket.emit('gameAction', data);

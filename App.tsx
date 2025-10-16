@@ -6,7 +6,8 @@ import type { Socket } from 'socket.io-client';
 // This is a global from the script tag in index.html
 declare const io: (uri: string) => Socket;
 
-const SOCKET_SERVER_URL = 'https://ue-web-controller-536009461785.asia-southeast1.run.app';
+//const SOCKET_SERVER_URL = 'https://ue-web-controller-536009461785.asia-southeast1.run.app';
+const SOCKET_SERVER_URL = 'http://localhost:3000/';
 
 // --- Helper Components (defined outside App to prevent re-rendering issues) ---
 
@@ -26,7 +27,7 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onJoin }) => {
 
   return (
     <div className="flex flex-col items-center justify-center h-full p-4">
-      <h1 className="text-5xl font-bold mb-8 text-pink-400">Kitty Controller</h1>
+      <h1 className="text-5xl font-bold mb-8 text-pink-400">Web Controller</h1>
       <form onSubmit={handleSubmit} className="w-full max-w-sm">
         <input
           type="text"
@@ -51,13 +52,13 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onJoin }) => {
 interface ControllerScreenProps {
   socket: Socket | null;
   playerName: string;
-  onEndGame: () => void;
 }
 
-const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName, onEndGame }) => {
+const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName }) => {
   const [queuePosition, setQueuePosition] = useState<number | null>(null);
   const [queueTotal, setQueueTotal] = useState<number | null>(null);
   const [score, setScore] = useState(0);
+  const [remainingTime, setRemainingTime] = useState(0);
 
   const handleMoveStart = (direction: 'left' | 'right') => {
     socket?.emit('move', { direction, action: 'start' });
@@ -73,6 +74,7 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName,
       setQueuePosition(null);
       setQueueTotal(null);
       setScore(0);
+      setRemainingTime(0);
       return;
     }
 
@@ -86,6 +88,7 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName,
       setQueuePosition(0);
       setQueueTotal(prev => prev ?? 0);
       setScore(0);
+      setRemainingTime(30000);
     };
 
     const onGameOver = () => {
@@ -98,16 +101,23 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName,
       setScore(data.score);
     };
 
+    const onTimeUpdate = (data: { remaining: number }) => {
+      console.log('timeUpdate received:', data.remaining);
+      setRemainingTime(data.remaining);
+    };
+
     socket.on('queueUpdate', onQueueUpdate);
     socket.on('yourTurn', onYourTurn);
     socket.on('gameOver', onGameOver);
     socket.on('scoreUpdate', onScoreUpdate);
+    socket.on('timeUpdate', onTimeUpdate);
 
     return () => {
       socket.off('queueUpdate', onQueueUpdate);
       socket.off('yourTurn', onYourTurn);
       socket.off('gameOver', onGameOver);
       socket.off('scoreUpdate', onScoreUpdate);
+      socket.off('timeUpdate', onTimeUpdate);
     };
   }, [socket]);
 
@@ -127,16 +137,15 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName,
           )}
         </div>
         {queuePosition === 0 && (
-          <div className="text-2xl font-bold text-white">
-            Score: {score}
+          <div className="flex items-center gap-4">
+            <div className="text-2xl font-bold text-white">
+                Score: {score}
+            </div>
+            <div className="text-lg font-bold text-yellow-400">
+                Time: {Math.ceil(remainingTime / 1000)}s
+            </div>
           </div>
         )}
-        <button
-          onClick={onEndGame}
-          className="px-4 py-2 text-sm font-bold text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors"
-        >
-          End Game
-        </button>
       </header>
 
       <main className="flex-grow flex items-center justify-around gap-4">
@@ -186,7 +195,7 @@ interface EndScreenProps {
 const EndScreen: React.FC<EndScreenProps> = ({ onPlayAgain, finalScore }) => {
   return (
     <div className="flex flex-col items-center justify-center h-full p-4 text-center">
-      <h1 className="text-6xl font-bold mb-4 text-purple-500">Nap time!</h1>
+      <h1 className="text-6xl font-bold mb-4 text-purple-500">Out of time</h1>
       <p className="text-2xl text-white mb-4">Your score: {finalScore}</p>
       <p className="text-xl text-gray-400 mb-8">Thanks for playing!</p>
       <button
@@ -260,11 +269,6 @@ function App() {
     socket.current?.emit('joinGame', { playerName: name });
   }, []);
 
-  const handleEndGame = useCallback(() => {
-    setGameState(GameState.ENDGAME);
-    socket.current?.emit('endGame', { playerName });
-  }, [playerName]);
-
   const handlePlayAgain = useCallback(() => {
     setPlayerName('');
     setFinalScore(0);
@@ -276,7 +280,7 @@ function App() {
       case GameState.SETUP:
         return <SetupScreen onJoin={handleJoin} />;
       case GameState.CONTROLLER:
-        return <ControllerScreen socket={socket.current} playerName={playerName} onEndGame={handleEndGame} />;
+        return <ControllerScreen socket={socket.current} playerName={playerName} />;
       case GameState.ENDGAME:
         return <EndScreen onPlayAgain={handlePlayAgain} finalScore={finalScore} />;
       default:
