@@ -251,13 +251,7 @@ io.on('connection', (socket: Socket) => {
   });
 
   // Event: Player manually ends their game
-  socket.on('endGame', () => {
-    // Only the active player can end the game
-    if (activePlayer && socket.id === activePlayer.id) {
-      console.log(`Active player ${activePlayer.name} ended their game manually.`);
-      handleTimeUp();
-    }
-  });
+  
 
   // Event: Client disconnects
   socket.on('disconnect', () => {

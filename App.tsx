@@ -6,7 +6,7 @@ import type { Socket } from 'socket.io-client';
 // This is a global from the script tag in index.html
 declare const io: (uri: string) => Socket;
 
-//const SOCKET_SERVER_URL = 'https://ue-web-controller-536009461785.asia-southeast1.run.app';
+
 const SOCKET_SERVER_URL = 'http://localhost:3001';
 
 // const SOCKET_SERVER_URL = 'https://ue-web-controller-536009461785.asia-southeast1.run.app';
@@ -108,11 +108,7 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName 
       setRemainingTime(30000);
     };
 
-    const onGameOver = () => {
-      // Clear queue info when game ends
-      setQueuePosition(null);
-      setQueueTotal(null);
-    };
+    
 
     const onScoreUpdate = (data: { score: number }) => {
       setScore(data.score);
@@ -125,7 +121,7 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName 
     socket.on('queueUpdate', onQueueUpdate);
     socket.on('prepareToPlay', onPrepareToPlay);
     socket.on('yourTurn', onYourTurn);
-    socket.on('gameOver', onGameOver);
+    
     socket.on('scoreUpdate', onScoreUpdate);
     socket.on('timeUpdate', onTimeUpdate);
 
@@ -133,7 +129,7 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName 
       socket.off('queueUpdate', onQueueUpdate);
       socket.off('prepareToPlay', onPrepareToPlay);
       socket.off('yourTurn', onYourTurn);
-      socket.off('gameOver', onGameOver);
+      
       socket.off('scoreUpdate', onScoreUpdate);
       socket.off('timeUpdate', onTimeUpdate);
     };
