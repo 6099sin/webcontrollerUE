@@ -9,6 +9,8 @@ declare const io: (uri: string) => Socket;
 //const SOCKET_SERVER_URL = 'https://ue-web-controller-536009461785.asia-southeast1.run.app';
 const SOCKET_SERVER_URL = 'http://localhost:3001';
 
+// const SOCKET_SERVER_URL = 'https://ue-web-controller-536009461785.asia-southeast1.run.app';
+
 // --- Helper Components (defined outside App to prevent re-rendering issues) ---
 
 interface SetupScreenProps {
@@ -213,22 +215,25 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName 
 };
 
 interface EndScreenProps {
-  onPlayAgain: () => void;
   finalScore: number;
 }
 
-const EndScreen: React.FC<EndScreenProps> = ({ onPlayAgain, finalScore }) => {
+const EndScreen: React.FC<EndScreenProps> = ({ finalScore }) => {
   return (
     <div className="flex flex-col items-center justify-center h-full p-4 text-center">
       <h1 className="text-6xl font-bold mb-4 text-purple-500">Out of time</h1>
       <p className="text-2xl text-white mb-4">Your score: {finalScore}</p>
       <p className="text-xl text-gray-400 mb-8">Thanks for playing!</p>
-      <button
-        onClick={onPlayAgain}
-        className="px-8 py-4 text-xl font-bold text-white bg-pink-600 rounded-lg hover:bg-pink-700 transition-colors"
-      >
-        Play Again
-      </button>
+    </div>
+  );
+};
+
+const WaitingScreen: React.FC = () => {
+  return (
+    <div className="flex flex-col items-center justify-center h-full p-4 text-center">
+      <h1 className="text-4xl font-bold mb-4 text-yellow-400">Game in Progress</h1>
+      <p className="text-lg text-gray-300 mb-8">Please wait for the current round to finish.</p>
+      <JoiningDots baseText="Waiting" />
     </div>
   );
 };
@@ -251,7 +256,7 @@ const JoiningDots: React.FC<{ baseText?: string; intervalMs?: number }> = ({ bas
 // --- Main App Component ---
 
 function App() {
-  const [gameState, setGameState] = useState<GameState>(GameState.SETUP);
+  const [gameState, setGameState] = useState<GameState>(GameState.WAITING_QUEUE);
   const [playerName, setPlayerName] = useState<string>('');
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const socket = useRef<Socket | null>(null);
@@ -271,6 +276,21 @@ function App() {
       console.log('Disconnected from server');
       setIsConnected(false);
       setGameState(GameState.ENDGAME); // Force end game on disconnect
+    });
+
+    socket.current.on('connectionStatus', ({ isGameActive }: { isGameActive: boolean }) => {
+      if (isGameActive) {
+        setGameState(GameState.WAITING_QUEUE);
+      } else {
+        setGameState(GameState.SETUP);
+      }
+    });
+
+    socket.current.on('gameAvailable', () => {
+      // If we are in the waiting queue or endgame screen, switch to setup
+      if (gameState === GameState.WAITING_QUEUE || gameState === GameState.ENDGAME) {
+        setGameState(GameState.SETUP);
+      }
     });
 
     // Listen for server-initiated game over
@@ -294,22 +314,18 @@ function App() {
     socket.current?.emit('joinGame', { playerName: name });
   }, []);
 
-  const handlePlayAgain = useCallback(() => {
-    setPlayerName('');
-    setFinalScore(0);
-    setGameState(GameState.SETUP);
-  }, []);
-
   const renderContent = () => {
     switch (gameState) {
       case GameState.SETUP:
         return <SetupScreen onJoin={handleJoin} />;
+      case GameState.WAITING_QUEUE:
+        return <WaitingScreen />;
       case GameState.CONTROLLER:
         return <ControllerScreen socket={socket.current} playerName={playerName} />;
       case GameState.ENDGAME:
-        return <EndScreen onPlayAgain={handlePlayAgain} finalScore={finalScore} />;
+        return <EndScreen finalScore={finalScore} />;
       default:
-        return <SetupScreen onJoin={handleJoin} />;
+        return <WaitingScreen />;
     }
   };
 

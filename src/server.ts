@@ -3,7 +3,7 @@ import http from 'http';
 import { Server, Socket } from 'socket.io';
 import path from 'path';
 
-// --- APPLICATION SETUP ---
+
 const app = express();
 
 // Serve the static files from the React app
@@ -31,6 +31,7 @@ interface Player {
   id: string; // The socket ID
   name: string;
   score: number;
+  userId: string; // The unique ID to be saved
 }
 
 // Queue for players waiting for their turn
@@ -48,29 +49,55 @@ let roundEndTime: number = 0;
 // --- CORE FUNCTIONS ---
 
 /**
- * Ends the current round, notifies the player, and starts the next round if possible.
+ * Called when the round timer expires. Asks the game for the final score.
  */
-const endRound = () => {
-  if (roundTimer) {
-    clearTimeout(roundTimer);
-    roundTimer = null;
-  }
-  if (countdownTimer) {
-    clearInterval(countdownTimer);
-    countdownTimer = null;
-  }
+const handleTimeUp = () => {
+  if (roundTimer) clearTimeout(roundTimer);
+  roundTimer = null;
 
-  if (activePlayer) {
-    console.log(`Round ended for ${activePlayer.name}. Final score: ${activePlayer.score}`);
-    // Notify the player's client that their game is over
-    io.to(activePlayer.id).emit('gameOver', { finalScore: activePlayer.score });
+  if (activePlayer && gameClientSocket) {
+    console.log(`Time up for ${activePlayer.name}. Requesting final score from game.`);
+    gameClientSocket.emit('requestFinalScore');
+  } 
+  // If the game client disconnected, we can't get a final score, so just end it.
+  else if (activePlayer) {
+    processEndOfRound(activePlayer.score); // End with the last known score
+  }
+};
+
+/**
+ * Contains all the logic for what happens after a round is officially over.
+ */
+const processEndOfRound = (finalScore: number) => {
+  if (!activePlayer) return; // Prevent running twice
+
+  // Update score with the final, authoritative value from the game
+  activePlayer.score = finalScore;
+
+  console.log(`Processing end of round for ${activePlayer.name}. Final score: ${activePlayer.score}`);
+  
+  // 1. Prepare data for Unreal to save locally
+  const gameResult = {
+    userId: activePlayer.userId,
+    playerName: activePlayer.name,
+    totalScore: activePlayer.score,
+    timestamp: new Date().toISOString()
+  };
+
+  // 2. Send data to Unreal
+  if (gameClientSocket) {
+    gameClientSocket.emit('recordGameSession', gameResult);
   }
   
+  // 3. Notify web controller
+  io.to(activePlayer.id).emit('gameOver', { finalScore: activePlayer.score });
+
+  const playerToClear = activePlayer;
   activePlayer = null;
 
-  // Check if there are players waiting in the queue
+  // 4. Start the next player in the queue
   if (playerQueue.length > 0) {
-    const nextPlayer = playerQueue.shift()!; // Get the next player from the front
+    const nextPlayer = playerQueue.shift()!;
     console.log(`Next player is ${nextPlayer.name}. Preparing their round.`);
     prepareRound(nextPlayer);
 
@@ -78,9 +105,10 @@ const endRound = () => {
     playerQueue.forEach((player, index) => {
         io.to(player.id).emit('queueUpdate', { position: index + 1, total: playerQueue.length });
     });
-
   } else {
     console.log("Queue is empty. Waiting for new players.");
+    // Notify all clients that the game is available
+    io.emit('gameAvailable');
     // Notify Unreal Engine that no one is playing
     if (gameClientSocket) {
       gameClientSocket.emit('waitingForPlayers');
@@ -122,7 +150,7 @@ const startRound = (player: Player) => {
   }
 
   // Set a timer for the round duration
-  roundTimer = setTimeout(endRound, ROUND_DURATION_MS);
+  roundTimer = setTimeout(handleTimeUp, ROUND_DURATION_MS);
 
   // Start a timer to send time updates
   if (countdownTimer) clearInterval(countdownTimer);
@@ -150,11 +178,10 @@ io.on('connection', (socket: Socket) => {
       gameClientSocket = socket;
       console.log(`Unreal Engine game client registered: ${socket.id}`);
 
-      // Listen for game-initiated round end events
-      socket.on('roundOverByGame', () => {
-        if (socket.id === gameClientSocket?.id) {
-            console.log("Received 'roundOverByGame' from game client. Ending round.");
-            endRound();
+      // Listen for the game's response with the final score
+      socket.on('submitFinalScore', (data: { score: number }) => {
+        if (socket.id === gameClientSocket?.id && activePlayer) {
+          processEndOfRound(data.score);
         }
       });
 
@@ -174,6 +201,8 @@ io.on('connection', (socket: Socket) => {
 
     } else if (client_type === 'web_controller') {
       console.log(`Web controller registered: ${socket.id}`);
+      // Immediately inform the new client about the current game status
+      socket.emit('connectionStatus', { isGameActive: activePlayer !== null });
     } else {
       console.log(`Client ${socket.id} sent unknown client_type '${client_type}'. Disconnecting.`);
       socket.disconnect();
@@ -185,7 +214,7 @@ io.on('connection', (socket: Socket) => {
     // Ensure the game client cannot join the player queue
     if (socket.id === gameClientSocket?.id) return;
 
-    const newPlayer: Player = { id: socket.id, name: playerName, score: 0 };
+    const newPlayer: Player = { id: socket.id, name: playerName, score: 0, userId: socket.id };
     console.log(`Player ${playerName} (${socket.id}) wants to join.`);
 
     if (!activePlayer && playerQueue.length === 0) {
@@ -216,7 +245,7 @@ io.on('connection', (socket: Socket) => {
     // Only the active player can end the game
     if (activePlayer && socket.id === activePlayer.id) {
       console.log(`Active player ${activePlayer.name} ended their game manually.`);
-      endRound();
+      handleTimeUp();
     }
   });
 
@@ -231,7 +260,7 @@ io.on('connection', (socket: Socket) => {
         // Optional: End the current round if the game disconnects
         if(activePlayer) {
           console.log("Ending current round because game client disconnected.");
-          endRound();
+          handleTimeUp();
         }
         return; // No further action needed
     }
@@ -240,7 +269,7 @@ io.on('connection', (socket: Socket) => {
     // If the disconnected player was the active one, end the round.
     if (activePlayer && socket.id === activePlayer.id) {
       console.log(`Active player ${activePlayer.name} disconnected. Ending round.`);
-      endRound();
+      handleTimeUp();
     } else {
       // If the player was in the queue, remove them.
       const queueIndex = playerQueue.findIndex(p => p.id === socket.id);
