@@ -221,8 +221,8 @@ interface EndScreenProps {
 const EndScreen: React.FC<EndScreenProps> = ({ finalScore }) => {
   return (
     <div className="flex flex-col items-center justify-center h-full p-4 text-center">
-      <h1 className="text-6xl font-bold mb-4 text-purple-500">Out of time</h1>
-      <p className="text-2xl text-white mb-4">Your score: {finalScore}</p>
+      <h1 className="text-6xl font-bold mb-4 text-purple-500">Time's Up</h1>
+      <p className="text-2xl text-white mb-4">Final Point: {finalScore}</p>
       <p className="text-xl text-gray-400 mb-8">Thanks for playing!</p>
     </div>
   );
@@ -295,7 +295,7 @@ function App() {
 
     socket.current.on('gameAvailable', () => {
       // If we are in the waiting queue or endgame screen, switch to setup
-      if (gameState === GameState.WAITING_QUEUE || gameState === GameState.ENDGAME) {
+      if (gameState === GameState.WAITING_QUEUE) {
         setGameState(GameState.SETUP);
       }
     });
