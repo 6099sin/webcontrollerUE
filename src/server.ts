@@ -210,12 +210,22 @@ io.on('connection', (socket: Socket) => {
   });
 
   // Event: Player joins the game
-  socket.on('joinGame', ({ playerName }: { playerName: string }) => {
-    // Ensure the game client cannot join the player queue
+  socket.on('joinGame', ({ userId, playerName }: { userId?: string, playerName: string }) => {
     if (socket.id === gameClientSocket?.id) return;
 
-    const newPlayer: Player = { id: socket.id, name: playerName, score: 0, userId: socket.id };
-    console.log(`Player ${playerName} (${socket.id}) wants to join.`);
+    // Use the provided userId from LINE, OR if it's not provided,
+    // fall back to using the temporary socket.id.
+    const finalUserId = userId || socket.id;
+
+    console.log(`Player "${playerName}" (User ID: ${finalUserId}) wants to join.`);
+    
+    // Create the player object with the correct data
+    const newPlayer: Player = { 
+      id: socket.id,           // The temporary connection ID
+      name: playerName,        // The name the user typed
+      score: 0,
+      userId: finalUserId      // The persistent ID for data logging
+    };
 
     if (!activePlayer && playerQueue.length === 0) {
       // If no one is playing and no one is in queue, this player starts (after preparing).

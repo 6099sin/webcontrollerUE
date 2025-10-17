@@ -261,8 +261,15 @@ function App() {
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const socket = useRef<Socket | null>(null);
   const [finalScore, setFinalScore] = useState(0);
+  const [uniqueUserId, setUniqueUserId] = useState<string | null>(null);
 
   useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const userId = urlParams.get('user');
+    if (userId) {
+      setUniqueUserId(userId);
+    }
+
     // Connect to Socket.IO server
     socket.current = io(SOCKET_SERVER_URL);
 
@@ -311,8 +318,11 @@ function App() {
   const handleJoin = useCallback((name: string) => {
     setPlayerName(name);
     setGameState(GameState.CONTROLLER);
-    socket.current?.emit('joinGame', { playerName: name });
-  }, []);
+    socket.current?.emit('joinGame', { 
+      userId: uniqueUserId, 
+      playerName: name 
+    });
+  }, [uniqueUserId]);
 
   const renderContent = () => {
     switch (gameState) {
