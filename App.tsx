@@ -318,8 +318,10 @@ function App() {
   const handleJoin = useCallback((name: string) => {
     setPlayerName(name);
     setGameState(GameState.CONTROLLER);
+    
+    // Emit with playerName and the userId (which can be null if not from LINE)
     socket.current?.emit('joinGame', { 
-      userId: uniqueUserId, 
+      userId: uniqueUserId, // This is the state holding the ID from the URL
       playerName: name 
     });
   }, [uniqueUserId]);
