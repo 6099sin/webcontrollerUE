@@ -265,7 +265,7 @@ function App() {
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    const userId = urlParams.get('user');
+    const userId = urlParams.get('uid');
     if (userId) {
       setUniqueUserId(userId);
     }
