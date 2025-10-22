@@ -27,6 +27,7 @@ const io = new Server(server, {
 const PORT = process.env.PORT || 3001;
 const ROUND_DURATION_MS = 30000; // 30 seconds per round
 const PREPARE_DURATION_MS = 3000; // 3 seconds to prepare
+const UE_SCORE_TIMEOUT_MS = 300; // **NEW**: 0.3 seconds timeout for UE to send score
 
 // --- STATE MANAGEMENT ---
 interface Player {
@@ -54,29 +55,45 @@ let isRoundEnding: boolean = false;
  * บังคับจบรอบปัจจุบัน ใช้สำหรับกรณีหลุดการเชื่อมต่อหรือเกิดข้อผิดพลาด
  * @param reason เหตุผล (ถ้ามี) สำหรับการจบรอบ
  */
+
+
+// **NEW**: เพิ่มตัวแปรสำหรับเก็บ timeout การขอคะแนน
+let scoreRequestTimeout: ReturnType<typeof setTimeout> | null = null;
+
 const forceEndRound = (reason?: string) => {
-  if (!activePlayer || isRoundEnding) return; // ป้องกันการทำงานซ้ำซ้อน
+  if (!activePlayer || isRoundEnding) return;
 
   console.log(`Force ending round for ${activePlayer.name}. Reason: ${reason || 'Unknown'}`);
-  isRoundEnding = true; // ตั้งค่า flag
-  activePlayer.roundEndedNormally = false; // ทำเครื่องหมายว่าจบไม่ปกติ
+  isRoundEnding = true;
+  activePlayer.roundEndedNormally = false;
 
   if (roundTimer) clearTimeout(roundTimer);
   roundTimer = null;
   if (countdownTimer) clearInterval(countdownTimer);
   countdownTimer = null;
+  // **NEW**: เคลียร์ score timeout ที่อาจมีอยู่
+  if (scoreRequestTimeout) clearTimeout(scoreRequestTimeout);
+  scoreRequestTimeout = null;
 
-  // **FIX 2**: บอก UE โดยตรงให้หยุด
   if (gameClientSocket) {
-    console.log('Sending forceEndRound to UE client.');
+    console.log('Sending forceEndRound and requestFinalScore to UE client.');
     gameClientSocket.emit('forceEndRound');
-    // เรายังคงขอคะแนนอยู่ ให้ UE ตัดสินใจว่าคะแนนนั้นใช้ได้หรือไม่
     gameClientSocket.emit('requestFinalScore');
+
+    // **NEW**: เริ่มจับเวลา timeout สำหรับรอคะแนนจาก UE
+    const playerToEnd = activePlayer; // เก็บ context ของผู้เล่นไว้สำหรับ timeout
+    scoreRequestTimeout = setTimeout(() => {
+        console.warn(`UE score submission timed out for ${playerToEnd.name}. Using last known score: ${playerToEnd.score}`);
+        // ตรวจสอบให้แน่ใจว่ารอบยังไม่ได้ถูกประมวลผลไปแล้วจากการส่งคะแนนที่ล่าช้า
+        if (isRoundEnding && activePlayer === playerToEnd) {
+             processEndOfRound(playerToEnd.score);
+        }
+        scoreRequestTimeout = null; // เคลียร์ ref ของ timer
+    }, UE_SCORE_TIMEOUT_MS);
+
   } else {
-    // **FIX 1 Improvement**: หาก UE หลุดไปแล้ว เราไม่สามารถรับคะแนนได้ ให้ประมวลผลทันที
     console.warn('Cannot request final score from UE: Game client disconnected.');
-    // ใช้คะแนนล่าสุดที่รู้ แต่บันทึกสถานการณ์ไว้
-    processEndOfRound(activePlayer.score);
+    processEndOfRound(activePlayer.score); // ประมวลผลทันที
   }
 };
 
@@ -85,28 +102,41 @@ const forceEndRound = (reason?: string) => {
  * ถูกเรียกเมื่อหมดเวลาตามปกติ
  */
 const handleTimeUp = () => {
-  if (!activePlayer || isRoundEnding) return; // ป้องกันการทำงานซ้ำซ้อน
+  if (!activePlayer || isRoundEnding) return;
 
   console.log(`Normal time up for ${activePlayer.name}.`);
-  isRoundEnding = true; // ตั้งค่า flag
-  activePlayer.roundEndedNormally = true; // ทำเครื่องหมายว่าจบปกติ
+  isRoundEnding = true;
+  activePlayer.roundEndedNormally = true;
 
   if (roundTimer) clearTimeout(roundTimer);
   roundTimer = null;
   if (countdownTimer) clearInterval(countdownTimer);
   countdownTimer = null;
+  // **NEW**: เคลียร์ score timeout ที่อาจมีอยู่
+  if (scoreRequestTimeout) clearTimeout(scoreRequestTimeout);
+  scoreRequestTimeout = null;
 
   if (gameClientSocket) {
     console.log('Requesting final score from game.');
     gameClientSocket.emit('requestFinalScore');
+
+    // **NEW**: เริ่มจับเวลา timeout สำหรับรอคะแนนจาก UE
+    const playerToEnd = activePlayer; // เก็บ context ของผู้เล่นไว้สำหรับ timeout
+    scoreRequestTimeout = setTimeout(() => {
+        console.warn(`UE score submission timed out for ${playerToEnd.name}. Using last known score: ${playerToEnd.score}`);
+         // ตรวจสอบให้แน่ใจว่ารอบยังไม่ได้ถูกประมวลผลไปแล้วจากการส่งคะแนนที่ล่าช้า
+         if (isRoundEnding && activePlayer === playerToEnd) {
+             processEndOfRound(playerToEnd.score);
+         }
+        scoreRequestTimeout = null; // เคลียร์ ref ของ timer
+    }, UE_SCORE_TIMEOUT_MS);
+
   }
-  // **FIX 1 Improvement**: หาก UE หลุดไปก่อนหมดเวลาพอดี
   else {
     console.warn('Cannot request final score from UE at time up: Game client disconnected.');
-    processEndOfRound(activePlayer.score); // ใช้คะแนนล่าสุดที่รู้
+    processEndOfRound(activePlayer.score); // ประมวลผลทันที
   }
 };
-
 /**
  * ประมวลผลการสิ้นสุดรอบ
  * @param finalScore คะแนนที่ได้รับจาก game client
@@ -276,6 +306,13 @@ io.on('connection', (socket: Socket) => {
         // **FIX 8**: ตรวจสอบว่าเรากำลังรอคะแนนอยู่หรือไม่ และเป็น client ที่ถูกต้องหรือไม่
         if (socket.id === gameClientSocket?.id && activePlayer && isRoundEnding) {
           console.log(`Received final score ${data.score} from UE for ${activePlayer.name}`);
+          
+          // **NEW**: เคลียร์ timeout เนื่องจากเราได้รับคะแนนแล้ว
+          if (scoreRequestTimeout) {
+              clearTimeout(scoreRequestTimeout);
+              scoreRequestTimeout = null;
+          }
+          
           processEndOfRound(data.score);
         } else {
             console.warn(`submitFinalScore received unexpectedly from ${socket.id}. ActivePlayer: ${activePlayer?.name}, isRoundEnding: ${isRoundEnding}`);

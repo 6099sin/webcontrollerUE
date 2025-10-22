@@ -7,8 +7,8 @@ import './src/styles/background.css';
 // This is a global from the script tag in index.html
 declare const io: (uri: string) => Socket;
 
-const SOCKET_SERVER_URL = 'https://ue-web-controller-712649324249.asia-southeast1.run.app';
-// const SOCKET_SERVER_URL = 'http://localhost:3001';
+// const SOCKET_SERVER_URL = 'https://ue-web-controller-712649324249.asia-southeast1.run.app';
+const SOCKET_SERVER_URL = 'http://localhost:3001';
 
 
 
@@ -416,17 +416,29 @@ function App() {
     });
 
     socket.current.on('gameAvailable', () => {
-      // If we are in the waiting queue or endgame screen, switch to setup
+      console.log(`CLIENT: --- Received gameAvailable event. Current gameState: ${gameState}`);
+        
+      // --- MODIFIED LOGIC ---
+      // Only switch to SETUP if we are explicitly in the WAITING_QUEUE state.
+      // Do NOT switch if we are in ENDGAME or any other state.
       if (gameState === GameState.WAITING_QUEUE) {
-        setGameState(GameState.SETUP);
-      }
+          console.log(`CLIENT: --- Switching gameState to SETUP because it was WAITING_QUEUE`);
+          setGameState(GameState.SETUP);
+        } else {
+            // Log why we are *not* switching
+            console.log(`CLIENT: --- NOT switching gameState from ${gameState} on gameAvailable.`);
+        }
     });
 
     // Listen for server-initiated game over
     socket.current.on('gameOver', (data: { finalScore: number }) => {
         console.log(`Game over signal received from server. Final score: ${data.finalScore}`);
+        // เพิ่มบรรทัดนี้:
+        console.log(`CLIENT: Received gameOver event. Score: ${data.finalScore}, Current State: ${gameState}`);
         setFinalScore(data.finalScore);
         setGameState(GameState.ENDGAME);
+        // Log 2: ทันทีหลังตั้งค่า state (หมายเหตุ: state อาจยังไม่อัปเดตทันที)
+        console.log(`CLIENT: >>> Set gameState to ENDGAME`);
     });
 
     // Cleanup on component unmount
@@ -449,6 +461,8 @@ function App() {
   }, [uniqueUserId]);
 
   const renderContent = () => {
+    // เพิ่มบรรทัดนี้:
+    console.log("CLIENT: Rendering content for gameState:", gameState);
     switch (gameState) {
       case GameState.SETUP:
         return <SetupScreen onJoin={handleJoin} />;
