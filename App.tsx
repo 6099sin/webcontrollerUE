@@ -145,7 +145,7 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName 
       setQueuePosition(0);
       setQueueTotal(prev => prev ?? 0);
       setScore(0);
-      setRemainingTime(30000);
+      setRemainingTime(30000); // Game duration
     };
 
     const onGameOver = () => {
@@ -179,56 +179,72 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName 
     };
   }, [socket]);
 
+  // Check if player is waiting (in queue or preparing)
   const isQueued = queuePosition === null || queuePosition > 0;
+  const isPlaying = queuePosition === 0 && prepareTime === null; // Player is actively playing
 
   return (
-    <div className="relative flex flex-col h-full p-4"> {/* made relative to anchor overlay */}
-      <header className="flex justify-between items-center mb-4">
-        <div className="flex flex-col">
-          <h2 className="text-2xl font-semibold text-pink-400">{playerName}</h2>
-          {queuePosition !== null && (
-            queuePosition === 0 ? (
-              <span className="text-sm text-teal-300">Your turn</span>
-            ) : (
-              <span className="text-sm text-gray-400">{queuePosition - 1} queues left</span>
-            )
-          )}
-        </div>
-        {queuePosition === 0 && (
-          <div className="flex items-center gap-4">
-            <div className="text-2xl font-bold text-white font-['CPN_Condensed']">
-                Score: {score}
-            </div>
-            <div className="text-lg font-bold text-yellow-400 font-['CPN_Condensed']">
-                Time: {Math.ceil(remainingTime / 1000)}s
-            </div>
-          </div>
-        )}
-      </header>
+    // Added padding top to make space for absolute positioned elements
+    <div className="relative flex flex-col h-full p-4 pt-12"> 
 
-      <main className="flex-grow flex items-center justify-around gap-4">
+      {/* --- Added Player Name (Top Left) --- */}
+      {/* Only show when actively playing */}
+      {isPlaying && (
+        <div className="absolute top-4 left-4 text-left">
+          <h2 className="text-xl font-['CPN'] font-bold text-white drop-shadow">{playerName}</h2>
+          <span className="text-sm text-teal-300 drop-shadow">Your turn</span>
+        </div>
+      )}
+
+      {/* --- Added Score and Time (Top Right) --- */}
+      {/* Only show when actively playing */}
+      {isPlaying && (
+        <div className="absolute top-4 right-4 text-right">
+          <div className="text-xl font-bold text-white font-['CPN_Condensed'] drop-shadow">
+              Score: {score}
+          </div>
+          <div className="text-lg font-bold text-yellow-400 font-['CPN_Condensed'] drop-shadow">
+              Time: {Math.ceil(remainingTime / 1000)}s
+          </div>
+        </div>
+      )}
+
+      {/* Header Text (slightly smaller top padding) */}
+      <div className="text-center text-white pt-8 mb-8 opacity-90"> {/* Reduced pt */}
+        <h1 className="text-6xl font-['Central_Sang_Bleu'] tracking-wide">CENTRAL</h1>
+        <p className="text-2xl font-['Central_Sang_Bleu'] tracking-normal my-1">78TH ANNIVERSARY</p>
+        <h2 className="text-5xl font-['Central_Sang_Bleu'] tracking-wide">FLOWER SHOW</h2>
+      </div>
+
+      {/* Main Controller Buttons (Unchanged) */}
+      <main className="flex-grow flex items-center justify-around gap-4 px-4">
         <button
-          disabled={isQueued}
+          disabled={isQueued || prepareTime !== null} // Also disable during prepare countdown
           onMouseDown={() => handleMoveStart('left')}
           onMouseUp={() => handleMoveEnd('left')}
           onTouchStart={() => handleMoveStart('left')}
           onTouchEnd={() => handleMoveEnd('left')}
-          className="flex-1 h-full flex items-center justify-center bg-gray-800 border-2 border-gray-700 rounded-2xl active:bg-pink-700 active:border-pink-500 transition-all duration-100 select-none disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 h-full flex items-center justify-center text-[#F49C9B] opacity-80 active:opacity-100 transition-all duration-100 select-none disabled:opacity-30 disabled:cursor-not-allowed"
         >
-          <LeftArrowIcon />
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-24 h-24" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M19 5v14L5 12z" />
+          </svg>
         </button>
         <button
-          disabled={isQueued}
+          disabled={isQueued || prepareTime !== null} // Also disable during prepare countdown
           onMouseDown={() => handleMoveStart('right')}
           onMouseUp={() => handleMoveEnd('right')}
           onTouchStart={() => handleMoveStart('right')}
           onTouchEnd={() => handleMoveEnd('right')}
-          className="flex-1 h-full flex items-center justify-center bg-gray-800 border-2 border-gray-700 rounded-2xl active:bg-pink-700 active:border-pink-500 transition-all duration-100 select-none disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 h-full flex items-center justify-center text-[#F49C9B] opacity-80 active:opacity-100 transition-all duration-100 select-none disabled:opacity-30 disabled:cursor-not-allowed"
         >
-          <RightArrowIcon />
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-24 h-24" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M5 5v14l14-7z" />
+          </svg>
         </button>
       </main>
 
+      {/* Overlays for Queue and Prepare (Unchanged) */}
       {isQueued && prepareTime === null && (
         <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60 z-20">
           <div className="bg-gray-800 bg-opacity-90 text-center px-6 py-4 rounded-lg border border-gray-700">
@@ -256,24 +272,90 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName 
 
 interface EndScreenProps {
   finalScore: number;
+  playerName: string;
 }
 
-const EndScreen: React.FC<EndScreenProps> = ({ finalScore }) => {
+const EndScreen: React.FC<EndScreenProps> = ({ finalScore, playerName }) => {
   return (
-    <div className="flex flex-col items-center justify-center h-full p-4 text-center">
-      <h1 className="text-6xl font-bold mb-4 text-purple-500 font-['CPN']">Time's Up</h1>
-      <p className="text-2xl text-white mb-4">Final Point: {finalScore}</p>
-      <p className="text-xl text-gray-400 mb-8">Thanks for playing!</p>
+    <div className="flex flex-col items-center justify-start h-full p-8 pt-20 text-center overflow-y-auto">
+      
+      {/* 1. Title */}
+      <div className="text-center text-white mb-4">
+        <h1 className="text-5xl font-['CPN'] font-bold tracking-wider text-pink-400 drop-shadow-md">YOUR SCORE</h1>
+        <p className="text-2xl font-['CPN'] mt-1 text-pink-300 drop-shadow-sm">{playerName}</p>
+      </div>
+
+      {/* 2. Score Display (Flower Shape) */}
+      {/* We'll approximate the shape using CSS and SVG */}
+      <div className="relative w-64 h-64 flex items-center justify-center my-8">
+        {/* Background Flower Shape SVG */}
+        <svg viewBox="0 0 200 200" className="absolute w-full h-full drop-shadow-lg">
+          {/* Use a gradient for the pink/orange effect */}
+          <defs>
+            <radialGradient id="flowerGradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+              <stop offset="0%" style={{ stopColor: '#FFD1A0', stopOpacity: 1 }} /> 
+              <stop offset="60%" style={{ stopColor: '#FF8A8A', stopOpacity: 1 }} /> 
+              <stop offset="100%" style={{ stopColor: '#F49C9B', stopOpacity: 0.9 }} /> 
+            </radialGradient>
+          </defs>
+          {/* Approximate flower shape path */}
+          <path 
+            fill="url(#flowerGradient)" 
+            d="M100,5 C140,5 160,30 175,50 C195,75 195,125 175,150 C160,170 140,195 100,195 C60,195 40,170 25,150 C5,125 5,75 25,50 C40,30 60,5 100,5 Z M100,20 C70,20 55,40 45,60 C30,85 30,115 45,140 C55,160 70,180 100,180 C130,180 145,160 155,140 C170,115 170,85 155,60 C145,40 130,20 100,20 Z" 
+            transform="rotate(45 100 100)" // Rotate to make it look less like a square
+          />
+        </svg>
+        {/* Score Text */}
+        <span className="relative text-7xl font-['CPN_Condensed'] font-bold text-white drop-shadow-lg z-10">
+          {finalScore.toString().padStart(4, '0')} {/* Pad score with leading zeros */}
+        </span>
+      </div>
+
+      {/* 3. The 1 Point Section */}
+      <div className="bg-black bg-opacity-80 text-white p-4 rounded-2xl w-full max-w-sm mt-8 shadow-xl flex items-center justify-between relative overflow-hidden">
+         {/* Red corner accent */}
+         <div className="absolute top-0 right-0 h-12 w-12 border-t-4 border-r-4 border-red-500 rounded-tr-2xl"></div>
+
+         <div className="flex items-baseline">
+            <span className="text-5xl font-['Central_Sang_Bleu'] font-light mr-1">The</span>
+            <span className="text-8xl font-['Central_Sang_Bleu'] font-light leading-none border-r-4 border-red-500 pr-3 mr-3">1</span>
+         </div>
+         <div className="text-right">
+            <p className="text-sm font-['CPN'] text-gray-300">คุณได้แต้ม</p>
+            <p className="text-6xl font-['CPN_Condensed'] font-bold text-white leading-none">780</p> {/* Placeholder Value */}
+            <p className="text-lg font-['CPN_Condensed'] font-bold text-white">Point</p>
+         </div>
+      </div>
+
     </div>
   );
 };
 
 const WaitingScreen: React.FC = () => {
   return (
-    <div className="flex flex-col items-center justify-center h-full p-4 text-center">
-      <h1 className="text-4xl font-bold mb-4 text-yellow-400 font-['CPN']">Game in Progress</h1>
-      <p className="text-lg text-gray-300 mb-8">Please wait for the current round to finish.</p>
-      <JoiningDots baseText="Waiting" />
+    <div className="flex flex-col items-center justify-start h-full p-4 pt-20 text-center relative">
+      {/* "Please wait a moment" text in a white rounded box */}
+      <div className="bg-white px-8 py-3 rounded-full shadow-lg mb-20"> {/* Increased margin-bottom */}
+        <h1 className="text-3xl font-['CPN'] font-bold text-black">กรุณารอสักครู่</h1>
+      </div>
+
+      {/* Custom Loading Spinner */}
+      {/* This will create the pink star-like shape with a white loading animation inside */}
+      <div className="relative w-48 h-48 flex items-center justify-center">
+        {/* Outer pink star shape */}
+        <svg viewBox="0 0 100 100" className="absolute w-full h-full text-[#F49C9B]">
+          <path
+            fill="currentColor"
+            d="M 50 0 L 60 40 L 100 50 L 60 60 L 50 100 L 40 60 L 0 50 L 40 40 Z"
+          />
+        </svg>
+        
+        {/* Inner white circle for the actual spinner */}
+        <div className="absolute w-28 h-28 bg-white rounded-full flex items-center justify-center">
+          {/* Tailwind CSS spinner */}
+          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-pink-500"></div>
+        </div>
+      </div>
     </div>
   );
 };
@@ -375,7 +457,7 @@ function App() {
       case GameState.CONTROLLER:
         return <ControllerScreen socket={socket.current} playerName={playerName} />;
       case GameState.ENDGAME:
-        return <EndScreen finalScore={finalScore} />;
+        return <EndScreen finalScore={finalScore} playerName={playerName} />;
       default:
         return <WaitingScreen />;
     }
