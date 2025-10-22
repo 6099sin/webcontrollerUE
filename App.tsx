@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { GameState } from './types';
 import { LeftArrowIcon, RightArrowIcon } from './components/icons';
 import type { Socket } from 'socket.io-client';
+import './src/styles/background.css';
 
 // This is a global from the script tag in index.html
 declare const io: (uri: string) => Socket;
@@ -29,7 +30,7 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onJoin }) => {
 
   return (
     <div className="flex flex-col items-center justify-center h-full p-4">
-      <h1 className="text-5xl font-bold mb-8 text-pink-400">Web Controller</h1>
+      <h1 className="text-5xl font-bold mb-8 text-pink-400 font-['CPN']">Web Controller</h1>
       <form onSubmit={handleSubmit} className="w-full max-w-sm">
         <input
           type="text"
@@ -156,10 +157,10 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName 
         </div>
         {queuePosition === 0 && (
           <div className="flex items-center gap-4">
-            <div className="text-2xl font-bold text-white">
+            <div className="text-2xl font-bold text-white font-['CPN_Condensed']">
                 Score: {score}
             </div>
-            <div className="text-lg font-bold text-yellow-400">
+            <div className="text-lg font-bold text-yellow-400 font-['CPN_Condensed']">
                 Time: {Math.ceil(remainingTime / 1000)}s
             </div>
           </div>
@@ -221,7 +222,7 @@ interface EndScreenProps {
 const EndScreen: React.FC<EndScreenProps> = ({ finalScore }) => {
   return (
     <div className="flex flex-col items-center justify-center h-full p-4 text-center">
-      <h1 className="text-6xl font-bold mb-4 text-purple-500">Time's Up</h1>
+      <h1 className="text-6xl font-bold mb-4 text-purple-500 font-['CPN']">Time's Up</h1>
       <p className="text-2xl text-white mb-4">Final Point: {finalScore}</p>
       <p className="text-xl text-gray-400 mb-8">Thanks for playing!</p>
     </div>
@@ -231,7 +232,7 @@ const EndScreen: React.FC<EndScreenProps> = ({ finalScore }) => {
 const WaitingScreen: React.FC = () => {
   return (
     <div className="flex flex-col items-center justify-center h-full p-4 text-center">
-      <h1 className="text-4xl font-bold mb-4 text-yellow-400">Game in Progress</h1>
+      <h1 className="text-4xl font-bold mb-4 text-yellow-400 font-['CPN']">Game in Progress</h1>
       <p className="text-lg text-gray-300 mb-8">Please wait for the current round to finish.</p>
       <JoiningDots baseText="Waiting" />
     </div>

@@ -1,0 +1,20 @@
+@font-face {
+  font-family: 'Central Sang Bleu';
+  src: url('/fonts/CENTRALSANGBLEU-MEDIUM.OTF') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'CPN';
+  src: url('/fonts/CPN-BOLD.OTF') format('opentype');
+  font-weight: bold;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'CPN Condensed';
+  src: url('/fonts/CPN-BOLDCONDENSED.OTF') format('opentype');
+  font-weight: bold;
+  font-style: normal;
+}
