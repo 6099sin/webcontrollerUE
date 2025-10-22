@@ -343,7 +343,7 @@ function App() {
   };
 
   return (
-    <div className="h-screen w-screen bg-gray-900 text-white overflow-hidden select-none">
+    <div className="h-screen w-screen  text-white overflow-hidden select-none">
        <div className="absolute top-2 right-2 flex items-center space-x-2">
             <span className="text-xs text-gray-500">
                 {isConnected ? 'Connected' : 'Disconnected'}
