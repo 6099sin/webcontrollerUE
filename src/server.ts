@@ -6,7 +6,9 @@ import path from 'path';
 
 const app = express();
 
-// Serve the static files from the React app
+// Serve the static files (corrected path for development, assuming build places it correctly)
+// NOTE: For development, ensure your build process or dev server handles static files correctly.
+// This path assumes the 'public' folder is relative to the compiled 'dist' directory.
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Handles any requests that don't match the ones above
@@ -17,7 +19,7 @@ app.get('*', (req,res) =>{
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*", // Allow all origins for this simple case
+    origin: "*", // Allow all origins for simple case
     methods: ["GET", "POST"]
   }
 });
@@ -32,134 +34,226 @@ interface Player {
   name: string;
   score: number;
   userId: string; // The unique ID to be saved
+  // **NEW**: Flag เพื่อติดตามว่ารอบจบลงตามปกติหรือไม่
+  roundEndedNormally?: boolean;
 }
 
-// Queue for players waiting for their turn
 let playerQueue: Player[] = [];
-// The player who is currently playing
 let activePlayer: Player | null = null;
-// Holds the NodeJS.Timeout instance for the current round
 let roundTimer: ReturnType<typeof setTimeout> | null = null;
-// Holds the socket for the single Unreal Engine game client
 let gameClientSocket: Socket | null = null;
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
 let roundEndTime: number = 0;
-
+// **NEW**: Flags เพื่อจัดการการเปลี่ยนสถานะและป้องกัน race conditions/การประมวลผลซ้ำซ้อน
+let isAssigningPlayer: boolean = false;
+let isRoundEnding: boolean = false;
 
 // --- CORE FUNCTIONS ---
 
 /**
- * Called when the round timer expires. Asks the game for the final score.
+ * บังคับจบรอบปัจจุบัน ใช้สำหรับกรณีหลุดการเชื่อมต่อหรือเกิดข้อผิดพลาด
+ * @param reason เหตุผล (ถ้ามี) สำหรับการจบรอบ
  */
-const handleTimeUp = () => {
+const forceEndRound = (reason?: string) => {
+  if (!activePlayer || isRoundEnding) return; // ป้องกันการทำงานซ้ำซ้อน
+
+  console.log(`Force ending round for ${activePlayer.name}. Reason: ${reason || 'Unknown'}`);
+  isRoundEnding = true; // ตั้งค่า flag
+  activePlayer.roundEndedNormally = false; // ทำเครื่องหมายว่าจบไม่ปกติ
+
   if (roundTimer) clearTimeout(roundTimer);
   roundTimer = null;
+  if (countdownTimer) clearInterval(countdownTimer);
+  countdownTimer = null;
 
-  if (activePlayer && gameClientSocket) {
-    console.log(`Time up for ${activePlayer.name}. Requesting final score from game.`);
+  // **FIX 2**: บอก UE โดยตรงให้หยุด
+  if (gameClientSocket) {
+    console.log('Sending forceEndRound to UE client.');
+    gameClientSocket.emit('forceEndRound');
+    // เรายังคงขอคะแนนอยู่ ให้ UE ตัดสินใจว่าคะแนนนั้นใช้ได้หรือไม่
     gameClientSocket.emit('requestFinalScore');
-  } 
-  // If the game client disconnected, we can't get a final score, so just end it.
-  else if (activePlayer) {
-    processEndOfRound(activePlayer.score); // End with the last known score
+  } else {
+    // **FIX 1 Improvement**: หาก UE หลุดไปแล้ว เราไม่สามารถรับคะแนนได้ ให้ประมวลผลทันที
+    console.warn('Cannot request final score from UE: Game client disconnected.');
+    // ใช้คะแนนล่าสุดที่รู้ แต่บันทึกสถานการณ์ไว้
+    processEndOfRound(activePlayer.score);
+  }
+};
+
+
+/**
+ * ถูกเรียกเมื่อหมดเวลาตามปกติ
+ */
+const handleTimeUp = () => {
+  if (!activePlayer || isRoundEnding) return; // ป้องกันการทำงานซ้ำซ้อน
+
+  console.log(`Normal time up for ${activePlayer.name}.`);
+  isRoundEnding = true; // ตั้งค่า flag
+  activePlayer.roundEndedNormally = true; // ทำเครื่องหมายว่าจบปกติ
+
+  if (roundTimer) clearTimeout(roundTimer);
+  roundTimer = null;
+  if (countdownTimer) clearInterval(countdownTimer);
+  countdownTimer = null;
+
+  if (gameClientSocket) {
+    console.log('Requesting final score from game.');
+    gameClientSocket.emit('requestFinalScore');
+  }
+  // **FIX 1 Improvement**: หาก UE หลุดไปก่อนหมดเวลาพอดี
+  else {
+    console.warn('Cannot request final score from UE at time up: Game client disconnected.');
+    processEndOfRound(activePlayer.score); // ใช้คะแนนล่าสุดที่รู้
   }
 };
 
 /**
- * Contains all the logic for what happens after a round is officially over.
+ * ประมวลผลการสิ้นสุดรอบ
+ * @param finalScore คะแนนที่ได้รับจาก game client
  */
 const processEndOfRound = (finalScore: number) => {
-  if (!activePlayer) return; // Prevent running twice
-
-  // Update score with the final, authoritative value from the game
-  activePlayer.score = finalScore;
-
-  console.log(`Processing end of round for ${activePlayer.name}. Final score: ${activePlayer.score}`);
-  
-  // 1. Prepare data for Unreal to save locally
-  const gameResult = {
-    userId: activePlayer.userId,
-    playerName: activePlayer.name,
-    totalScore: activePlayer.score,
-    timestamp: new Date().toISOString()
-  };
-
-  // 2. Send data to Unreal
-  if (gameClientSocket) {
-    gameClientSocket.emit('recordGameSession', gameResult);
+  // **FIX 8**: ตรวจสอบให้แน่ใจว่าฟังก์ชันนี้ทำงานเพียงครั้งเดียวต่อเซสชันของผู้เล่นที่กำลังเล่นอยู่
+  if (!activePlayer || !isRoundEnding) {
+    console.warn('processEndOfRound called unexpectedly or redundantly.');
+    return;
   }
-  
-  // 3. Notify web controller
-  io.to(activePlayer.id).emit('gameOver', { finalScore: activePlayer.score });
 
-  const playerToClear = activePlayer;
-  activePlayer = null;
+  const endedPlayer = activePlayer; // เก็บข้อมูลผู้เล่นที่กำลังจะจบ
+  activePlayer = null; // ล้าง active player *ก่อน* การทำงานแบบ async หรือการเริ่มคนถัดไป
 
-  // 4. Start the next player in the queue
+  try {
+    // อัปเดตคะแนน
+    endedPlayer.score = finalScore;
+    console.log(`Processing end of round for ${endedPlayer.name}. Final score: ${endedPlayer.score}. Ended normally: ${endedPlayer.roundEndedNormally}`);
+
+    // 1. เตรียมข้อมูลสำหรับ Unreal
+    const gameResult = {
+      userId: endedPlayer.userId,
+      playerName: endedPlayer.name,
+      totalScore: endedPlayer.score,
+      timestamp: new Date().toISOString(),
+      // **NEW**: เพิ่ม flag บอกว่าจบรอบอย่างไร
+      completedNormally: endedPlayer.roundEndedNormally ?? false
+    };
+
+    // 2. ส่งข้อมูลไป Unreal (ถ้าเชื่อมต่ออยู่)
+    if (gameClientSocket) {
+      gameClientSocket.emit('recordGameSession', gameResult);
+    } else {
+      console.warn(`Cannot send recordGameSession for ${endedPlayer.name}: Game client disconnected.`);
+    }
+
+    // 3. แจ้ง web controller
+    io.to(endedPlayer.id).emit('gameOver', { finalScore: endedPlayer.score });
+
+  } catch (error) {
+    console.error(`Error during processEndOfRound for ${endedPlayer.name}:`, error);
+    // อาจแจ้งเตือนผู้ใช้หรือแอดมินที่นี่
+  } finally {
+    isRoundEnding = false; // รีเซ็ต flag *หลังจาก* ประมวลผลเสร็จสิ้น
+
+    // 4. เริ่มผู้เล่นคนถัดไป (ถ้ามี)
+    startNextPlayer();
+  }
+};
+
+/**
+ * เริ่มผู้เล่นคนถัดไปจากคิว
+ */
+const startNextPlayer = () => {
+   // **FIX 7**: ตรวจสอบ lock ก่อนดำเนินการต่อ
+  if (isAssigningPlayer) return;
+
   if (playerQueue.length > 0) {
+    isAssigningPlayer = true; // **FIX 7**: ตั้งค่า lock
     const nextPlayer = playerQueue.shift()!;
     console.log(`Next player is ${nextPlayer.name}. Preparing their round.`);
-    prepareRound(nextPlayer);
 
-    // Update remaining players in the queue about their new position
+    // อัปเดตผู้เล่นที่เหลือในคิวเกี่ยวกับตำแหน่งใหม่
     playerQueue.forEach((player, index) => {
         io.to(player.id).emit('queueUpdate', { position: index + 1, total: playerQueue.length });
     });
+
+    // เตรียมรอบ (ซึ่งจะปลด lock ในภายหลัง)
+    prepareRound(nextPlayer);
+
   } else {
     console.log("Queue is empty. Waiting for new players.");
-    // Notify all clients that the game is available
     io.emit('gameAvailable');
-    // Notify Unreal Engine that no one is playing
     if (gameClientSocket) {
       gameClientSocket.emit('waitingForPlayers');
     }
+    // ไม่จำเป็นต้อง lock ถ้าคิวว่าง
   }
 };
 
 /**
- * Prepares a player for their round with a countdown.
- * @param player The player to prepare.
+ * เตรียมผู้เล่นสำหรับรอบด้วยการนับถอยหลัง
+ * @param player ผู้เล่นที่จะเตรียม
  */
 const prepareRound = (player: Player) => {
-  console.log(`Player ${player.name} is preparing to play.`);
-  
-  // Notify the player to get ready
-  io.to(player.id).emit('prepareToPlay', { duration: PREPARE_DURATION_MS });
+  // **FIX 6**: ครอบด้วย try...catch
+  try {
+    console.log(`Player ${player.name} is preparing to play.`);
+    io.to(player.id).emit('prepareToPlay', { duration: PREPARE_DURATION_MS });
 
-  // After the preparation time, start the actual round
-  setTimeout(() => {
-    startRound(player);
-  }, PREPARE_DURATION_MS);
+    setTimeout(() => {
+      startRound(player);
+    }, PREPARE_DURATION_MS);
+
+  } catch (error) {
+    console.error(`Error during prepareRound for ${player.name}:`, error);
+    // พยายามกู้คืน: ลบผู้เล่น, แจ้งเตือน, เริ่มคนถัดไป
+    io.to(player.id).emit('error', { message: 'Failed to start your round.' });
+    isAssigningPlayer = false; // **FIX 7**: ปลด lock เมื่อเกิดข้อผิดพลาด
+    startNextPlayer();
+  }
 };
 
 /**
- * Starts a new round for the given player.
- * @param player The player whose turn it is.
+ * เริ่มรอบใหม่สำหรับผู้เล่นที่กำหนด
+ * @param player ผู้เล่นที่ถึงตา
  */
 const startRound = (player: Player) => {
-  activePlayer = player;
-  roundEndTime = Date.now() + ROUND_DURATION_MS;
-  
-  console.log(`Starting round for ${player.name}. Duration: ${ROUND_DURATION_MS / 1000}s`);
+   // **FIX 6**: ครอบด้วย try...catch
+  try {
+    activePlayer = player;
+    activePlayer.roundEndedNormally = undefined; // รีเซ็ต flag
+    roundEndTime = Date.now() + ROUND_DURATION_MS;
+    isRoundEnding = false; // ตรวจสอบให้แน่ใจว่า flag การจบถูกรีเซ็ต
 
-  // Notify the player's client that it's their turn
-  io.to(player.id).emit('yourTurn');
-  // Notify Unreal Engine about the new player
-  if (gameClientSocket) {
-    gameClientSocket.emit('roundStart', { playerName: player.name });
-  }
+    console.log(`Starting round for ${player.name}. Duration: ${ROUND_DURATION_MS / 1000}s`);
 
-  // Set a timer for the round duration
-  roundTimer = setTimeout(handleTimeUp, ROUND_DURATION_MS);
-
-  // Start a timer to send time updates
-  if (countdownTimer) clearInterval(countdownTimer);
-  countdownTimer = setInterval(() => {
-    const remaining = Math.max(0, roundEndTime - Date.now());
-    if (activePlayer) {
-      io.to(activePlayer.id).emit('timeUpdate', { remaining });
+    io.to(player.id).emit('yourTurn');
+    if (gameClientSocket) {
+      gameClientSocket.emit('roundStart', { playerName: player.name });
     }
-  }, 1000);
+
+    roundTimer = setTimeout(handleTimeUp, ROUND_DURATION_MS);
+
+    if (countdownTimer) clearInterval(countdownTimer);
+    countdownTimer = setInterval(() => {
+      const remaining = Math.max(0, roundEndTime - Date.now());
+      if (activePlayer && activePlayer.id === player.id) { // ตรวจสอบว่าเป็นผู้เล่นที่ถูกต้อง
+        io.to(activePlayer.id).emit('timeUpdate', { remaining });
+      } else {
+        clearInterval(countdownTimer!); // หยุด timer หาก active player เปลี่ยนไปโดยไม่คาดคิด
+        countdownTimer = null;
+      }
+    }, 1000);
+
+  } catch (error) {
+     console.error(`Error during startRound for ${player.name}:`, error);
+     // พยายามกู้คืน: บังคับจบ, แจ้งเตือนผู้เล่น, เริ่มคนถัดไป
+     io.to(player.id).emit('error', { message: 'Failed to properly start your round.' });
+     if (activePlayer && activePlayer.id === player.id) {
+        forceEndRound('Error during startRound');
+     } else {
+       startNextPlayer(); // ลองเริ่มคนถัดไปหาก active player ไม่ได้ถูกตั้งค่าอย่างถูกต้อง
+     }
+  } finally {
+     isAssigningPlayer = false; // **FIX 7**: ปลด lock หลังจากพยายามเริ่ม
+  }
 };
 
 
@@ -167,7 +261,6 @@ const startRound = (player: Player) => {
 io.on('connection', (socket: Socket) => {
   console.log(`New client connected: ${socket.id}. Waiting for registration.`);
 
-  // Event: Client identifies itself
   socket.on('register', ({ client_type }: { client_type: 'game_client' | 'web_controller' }) => {
     if (client_type === 'game_client') {
       if (gameClientSocket) {
@@ -178,115 +271,110 @@ io.on('connection', (socket: Socket) => {
       gameClientSocket = socket;
       console.log(`Unreal Engine game client registered: ${socket.id}`);
 
-      // Listen for the game's response with the final score
+      // รอรับคะแนนสุดท้าย
       socket.on('submitFinalScore', (data: { score: number }) => {
-        if (socket.id === gameClientSocket?.id && activePlayer) {
+        // **FIX 8**: ตรวจสอบว่าเรากำลังรอคะแนนอยู่หรือไม่ และเป็น client ที่ถูกต้องหรือไม่
+        if (socket.id === gameClientSocket?.id && activePlayer && isRoundEnding) {
+          console.log(`Received final score ${data.score} from UE for ${activePlayer.name}`);
           processEndOfRound(data.score);
+        } else {
+            console.warn(`submitFinalScore received unexpectedly from ${socket.id}. ActivePlayer: ${activePlayer?.name}, isRoundEnding: ${isRoundEnding}`);
         }
       });
 
-      // Listen for score updates from the game client
+      // รอรับการอัปเดตคะแนน
       socket.on('updateScore', (data: { score: number }) => {
-        if (socket.id === gameClientSocket?.id && activePlayer) {
+        if (socket.id === gameClientSocket?.id && activePlayer && !isRoundEnding) {
           activePlayer.score = data.score;
-          // Forward the score to the active player's web controller
           io.to(activePlayer.id).emit('scoreUpdate', { score: data.score });
         }
       });
 
-      // If no one is playing, notify the new game client immediately.
-      if (!activePlayer) {
+      if (!activePlayer && playerQueue.length === 0) {
         gameClientSocket.emit('waitingForPlayers');
+      } else if (activePlayer) {
+          // หาก game client เชื่อมต่อเข้ามากลางรอบ ให้แจ้งข้อมูล
+           gameClientSocket.emit('roundStart', { playerName: activePlayer.name });
       }
 
     } else if (client_type === 'web_controller') {
       console.log(`Web controller registered: ${socket.id}`);
-      // Immediately inform the new client about the current game status
-      socket.emit('connectionStatus', { isGameActive: activePlayer !== null });
+      socket.emit('connectionStatus', { isGameActive: activePlayer !== null || playerQueue.length > 0 }); // พิจารณาคิวด้วย
     } else {
       console.log(`Client ${socket.id} sent unknown client_type '${client_type}'. Disconnecting.`);
       socket.disconnect();
     }
   });
 
-  // Event: Player joins the game
   socket.on('joinGame', ({ userId, playerName }: { userId?: string, playerName: string }) => {
     if (socket.id === gameClientSocket?.id) return;
+    // ป้องกันการเข้าร่วมซ้ำหากอยู่ในคิวหรือกำลังเล่นอยู่แล้ว
+    if (activePlayer?.id === socket.id || playerQueue.some(p => p.id === socket.id)) {
+        console.warn(`Player ${playerName} (${socket.id}) tried to join again.`);
+        return;
+    }
 
-    // Use the provided userId from LINE, OR if it's not provided,
-    // fall back to using the temporary socket.id.
     const finalUserId = userId || socket.id;
-
     console.log(`Player "${playerName}" (User ID: ${finalUserId}) wants to join.`);
-    
-    // Create the player object with the correct data
-    const newPlayer: Player = { 
-      id: socket.id,           // The temporary connection ID
-      name: playerName,        // The name the user typed
+
+    const newPlayer: Player = {
+      id: socket.id,
+      name: playerName,
       score: 0,
-      userId: finalUserId      // The persistent ID for data logging
+      userId: finalUserId
     };
 
-    if (!activePlayer && playerQueue.length === 0) {
-      // If no one is playing and no one is in queue, this player starts (after preparing).
-      prepareRound(newPlayer);
+    // **FIX 7**: ใช้ lock ก่อนตรวจสอบ/กำหนดค่า
+    if (!activePlayer && playerQueue.length === 0 && !isAssigningPlayer) {
+      isAssigningPlayer = true; // ตั้งค่า lock
+      prepareRound(newPlayer); // ฟังก์ชันนี้จะปลด lock ใน startRound/error
     } else {
-      // If someone is playing or in queue, add to the queue.
       playerQueue.push(newPlayer);
       console.log(`${playerName} added to queue. Position: ${playerQueue.length}`);
-      // Send an update to the player about their queue position.
       socket.emit('queueUpdate', { position: playerQueue.length, total: playerQueue.length });
     }
   });
 
-  // Event: Player sends a movement command
   socket.on('move', (data: { direction: 'left' | 'right', action: 'start' | 'stop' }) => {
-    // SECURITY: Ensure the person sending the move command is the active player.
-    if (activePlayer && socket.id === activePlayer.id) {
-      // Valid move, send it ONLY to the Unreal Engine client
+    // อนุญาตการเคลื่อนที่จาก active player เท่านั้น และเมื่อรอบยังไม่จบ
+    if (activePlayer && socket.id === activePlayer.id && !isRoundEnding) {
       if (gameClientSocket) {
         gameClientSocket.emit('gameAction', data);
       }
     }
   });
 
-  // Event: Player manually ends their game
+  // Event: ผู้เล่นจบเกมเอง (คงไว้เหมือนเดิม, handleTimeUp ตอนนี้ตั้งค่า isRoundEnding แล้ว)
   socket.on('endGame', () => {
-    // Only the active player can end the game
     if (activePlayer && socket.id === activePlayer.id) {
       console.log(`Active player ${activePlayer.name} ended their game manually.`);
-      handleTimeUp();
+      handleTimeUp(); // เปลี่ยนจาก forceEndRound, เพราะการจบเองเหมือนหมดเวลา
     }
   });
 
-  // Event: Client disconnects
   socket.on('disconnect', () => {
     console.log(`Client disconnected: ${socket.id}`);
 
-    // Check if the disconnected client was the game client
+    // **FIX 3**: ล้าง game client socket ทันทีหากหลุดการเชื่อมต่อ
     if (gameClientSocket && socket.id === gameClientSocket.id) {
         console.log("Unreal Engine game client has disconnected.");
         gameClientSocket = null;
-        // Optional: End the current round if the game disconnects
+        // บังคับจบรอบปัจจุบันหาก UE หลุด
         if(activePlayer) {
-          console.log("Ending current round because game client disconnected.");
-          handleTimeUp();
+          forceEndRound('Game client disconnected'); // ใช้ forceEndRound
         }
-        return; // No further action needed
+        return;
     }
 
-    // If it wasn't the game client, it's a player.
-    // If the disconnected player was the active one, end the round.
+    // จัดการ Web Controller หลุด
     if (activePlayer && socket.id === activePlayer.id) {
-      console.log(`Active player ${activePlayer.name} disconnected. Ending round.`);
-      handleTimeUp();
+      // **FIX 2**: ใช้ forceEndRound สำหรับผู้เล่นหลุด
+      forceEndRound('Player disconnected');
     } else {
-      // If the player was in the queue, remove them.
       const queueIndex = playerQueue.findIndex(p => p.id === socket.id);
       if (queueIndex !== -1) {
         const removedPlayer = playerQueue.splice(queueIndex, 1)[0];
         console.log(`Removed ${removedPlayer.name} from the queue due to disconnect.`);
-         // Update remaining players in the queue about their new position
         playerQueue.forEach((player, index) => {
             io.to(player.id).emit('queueUpdate', { position: index + 1, total: playerQueue.length });
         });
