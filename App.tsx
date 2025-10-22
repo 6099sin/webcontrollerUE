@@ -7,10 +7,10 @@ import './src/styles/background.css';
 // This is a global from the script tag in index.html
 declare const io: (uri: string) => Socket;
 
-//const SOCKET_SERVER_URL = 'https://ue-web-controller-536009461785.asia-southeast1.run.app';
-const SOCKET_SERVER_URL = 'http://localhost:3001';
+const SOCKET_SERVER_URL = 'https://ue-web-controller-712649324249.asia-southeast1.run.app';
+// const SOCKET_SERVER_URL = 'http://localhost:3001';
 
-// const SOCKET_SERVER_URL = 'https://ue-web-controller-536009461785.asia-southeast1.run.app';
+
 
 // --- Helper Components (defined outside App to prevent re-rendering issues) ---
 
@@ -18,6 +18,9 @@ interface SetupScreenProps {
   onJoin: (name: string) => void;
 }
 
+// =================================================================
+// START OF NEW/UPDATED SetupScreen COMPONENT
+// =================================================================
 const SetupScreen: React.FC<SetupScreenProps> = ({ onJoin }) => {
   const [name, setName] = useState('');
 
@@ -29,28 +32,64 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onJoin }) => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center h-full p-4">
-      <h1 className="text-5xl font-bold mb-8 text-pink-400 font-['CPN']">Web Controller</h1>
-      <form onSubmit={handleSubmit} className="w-full max-w-sm">
+    // Use flex-col, center horizontally, start from the top with padding
+    <div className="flex flex-col items-center justify-start h-full p-8 pt-20 overflow-y-auto">
+
+      {/* 1. Header Text */}
+      <div className="text-center text-black mb-8">
+        <h1 className="text-6xl font-['Central_Sang_Bleu'] tracking-wide">CENTRAL</h1>
+        <p className="text-2xl font-['Central_Sang_Bleu'] tracking-normal my-1">78TH ANNIVERSARY</p>
+        <h2 className="text-5xl font-['Central_Sang_Bleu'] tracking-wide">FLOWER SHOW</h2>
+      </div>
+
+      {/* 2. Instruction Box */}
+      {/* Using the pink color from the image: #F49C9B */}
+      <div className="bg-[#F49C9B] bg-opacity-95 text-black p-5 rounded-2xl mb-8 w-full max-w-xs shadow-md">
+        <h3 className="text-2xl font-['CPN'] font-bold text-center mb-2">วิธีการเล่นเกม</h3>
+        <p className="text-base font-['CPN'] text-center">
+          ขยับซ้าย-ขวา รับดอกไม้ และโบนัสไอเท็มx2 ให้ได้มากที่สุดใน 30 วินาที
+        </p>
+        
+        {/* --- Placeholder Icons --- 
+            NOTE: You will need to replace these placeholders with your actual icon images.
+            I will use emoji and styled text as placeholders.
+        */}
+        <div className="flex justify-around items-center mt-4">
+          <span className="text-3xl">🌸</span>
+          <span className="text-3xl">🌺</span>
+          <span className="text-3xl">🌼</span>
+          {/* Placeholder for the x2 icon */}
+          <span className="text-2xl font-bold bg-white px-2 py-1 rounded-md shadow-sm">x2</span>
+        </div>
+      </div>
+
+      {/* 3. Form */}
+      <form onSubmit={handleSubmit} className="w-full max-w-xs">
+        <label className="text-black font-['CPN'] font-bold mb-2 block text-center text-lg">
+          กรุณาใส่ชื่อผู้เล่น
+        </label>
         <input
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Enter Your Player Name"
-          className="w-full px-4 py-3 mb-4 text-lg text-white bg-gray-800 border-2 border-gray-700 rounded-lg focus:outline-none focus:border-pink-500 transition-colors"
+          className="w-full px-5 py-3 mb-4 text-lg text-black bg-white rounded-full shadow-inner border border-gray-300 focus:outline-none focus:ring-2 focus:ring-rose-400"
           autoFocus
         />
         <button
           type="submit"
           disabled={!name.trim()}
-          className="w-full px-4 py-3 text-lg font-bold text-white bg-pink-600 rounded-lg hover:bg-pink-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
+          className="w-full px-4 py-4 text-3xl font-['Central_Sang_Bleu'] font-bold text-white bg-[#F49C9B] rounded-full shadow-lg hover:bg-opacity-80 active:bg-opacity-100 transition-all disabled:bg-gray-400"
         >
-          Join Game
+          START
         </button>
       </form>
     </div>
   );
 };
+// =================================================================
+// END OF NEW/UPDATED SetupScreen COMPONENT
+// =================================================================
+
 
 interface ControllerScreenProps {
   socket: Socket | null;
@@ -343,7 +382,7 @@ function App() {
   };
 
   return (
-    <div className="h-screen w-screen  text-white overflow-hidden select-none">
+    <div className="h-screen w-screen text-white overflow-hidden select-none">
        <div className="absolute top-2 right-2 flex items-center space-x-2">
             <span className="text-xs text-gray-500">
                 {isConnected ? 'Connected' : 'Disconnected'}
