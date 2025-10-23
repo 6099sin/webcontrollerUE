@@ -227,6 +227,14 @@ const prepareRound = (player: Player) => {
     console.log(`Player ${player.name} is preparing to play.`);
     io.to(player.id).emit('prepareToPlay', { duration: PREPARE_DURATION_MS });
 
+    // **MODIFIED: Send roundStart to UE immediately at countdown start**
+    if (gameClientSocket) {
+      console.log(`Sending roundStart to UE for ${player.name} (during preparation).`);
+      gameClientSocket.emit('roundStart', { playerName: player.name });
+    } else {
+      console.warn(`Cannot send roundStart for ${player.name}: Game client disconnected.`);
+    }
+
     setTimeout(() => {
       startRound(player);
     }, PREPARE_DURATION_MS);
@@ -255,9 +263,11 @@ const startRound = (player: Player) => {
     console.log(`Starting round for ${player.name}. Duration: ${ROUND_DURATION_MS / 1000}s`);
 
     io.to(player.id).emit('yourTurn');
-    if (gameClientSocket) {
-      gameClientSocket.emit('roundStart', { playerName: player.name });
-    }
+    
+    // **MODIFIED: Removed from here (moved to prepareRound)**
+    // if (gameClientSocket) {
+    //   gameClientSocket.emit('roundStart', { playerName: player.name });
+    // }
 
     roundTimer = setTimeout(handleTimeUp, ROUND_DURATION_MS);
 
