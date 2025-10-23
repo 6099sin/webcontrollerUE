@@ -71,13 +71,13 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onJoin }) => {
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="w-full px-5 py-3 mb-4 text-lg text-black bg-white rounded-full shadow-inner border border-gray-300 focus:outline-none focus:ring-2 focus:ring-rose-400"
+          className="input input-bordered w-full px-5 py-3 mb-4 text-lg text-black bg-white rounded-full shadow-inner border border-gray-300 focus:outline-none focus:ring-2 focus:ring-rose-400"
           autoFocus
         />
         <button
           type="submit"
           disabled={!name.trim()}
-          className="w-full px-4 py-4 text-3xl font-['Central_Sang_Bleu'] font-bold text-white bg-[#F49C9B] rounded-full shadow-lg hover:bg-opacity-80 active:bg-opacity-100 transition-all disabled:bg-gray-400"
+          className="btn w-full px-4 py-4 text-3xl font-['Central_Sang_Bleu'] font-bold text-white bg-[#F49C9B] rounded-full shadow-lg hover:bg-opacity-80 active:bg-opacity-100 transition-all disabled:bg-gray-400"
         >
           START
         </button>
@@ -223,7 +223,7 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName 
           onMouseUp={() => handleMoveEnd('left')}
           onTouchStart={() => handleMoveStart('left')}
           onTouchEnd={() => handleMoveEnd('left')}
-          className="flex-1 h-full flex items-center justify-center text-[#F49C9B] opacity-80 active:opacity-100 transition-all duration-100 select-none disabled:opacity-30 disabled:cursor-not-allowed"
+          className="btn btn-ghost flex-1 h-full flex items-center justify-center text-[#F49C9B] opacity-80 active:opacity-100 transition-all duration-100 select-none disabled:opacity-30 disabled:cursor-not-allowed"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="w-24 h-24" fill="currentColor" viewBox="0 0 24 24">
             <path d="M19 5v14L5 12z" />
@@ -235,7 +235,7 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName 
           onMouseUp={() => handleMoveEnd('right')}
           onTouchStart={() => handleMoveStart('right')}
           onTouchEnd={() => handleMoveEnd('right')}
-          className="flex-1 h-full flex items-center justify-center text-[#F49C9B] opacity-80 active:opacity-100 transition-all duration-100 select-none disabled:opacity-30 disabled:cursor-not-allowed"
+          className="btn btn-ghost flex-1 h-full flex items-center justify-center text-[#F49C9B] opacity-80 active:opacity-100 transition-all duration-100 select-none disabled:opacity-30 disabled:cursor-not-allowed"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="w-24 h-24" fill="currentColor" viewBox="0 0 24 24">
             <path d="M5 5v14l14-7z" />
@@ -305,14 +305,14 @@ const WaitingScreen: React.FC = () => {
   return (
     <div className="flex flex-col items-center justify-center h-full p-4 text-center relative">
       {/* "Please wait a moment" text in a white rounded box */}
-      <div className="bg-white px-8 py-3 rounded-full shadow-lg">
+      <div className="alert alert-neutral px-8 py-3 rounded-full shadow-lg">
         <h1 className="text-3xl font-['CPN'] font-bold text-black ">กรุณารอสักครู่</h1>
       </div>
 
-      {/* Radial Spinner with FrameLoading.png background */}
+      {/* Image Spinner with FrameLoading.png background */}
       <div className="relative flex items-center justify-center w-48 h-48">
         <img src="/images/FrameLoading.png" alt="Loading Frame" className="absolute w-full h-full" />
-        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-pink-500 z-10"></div>
+        <img src="/images/Spinner.png" alt="Loading Spinner" className="absolute w-16 h-16 animate-spin" />
       </div>
     </div>
   );
