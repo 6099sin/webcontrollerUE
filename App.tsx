@@ -7,8 +7,8 @@ import './src/styles/background.css';
 // This is a global from the script tag in index.html
 declare const io: (uri: string) => Socket;
 
-const SOCKET_SERVER_URL = 'https://ue-web-controller-712649324249.asia-southeast1.run.app';
-// const SOCKET_SERVER_URL = 'http://localhost:3001';
+// const SOCKET_SERVER_URL = 'https://ue-web-controller-712649324249.asia-southeast1.run.app';
+const SOCKET_SERVER_URL = 'http://localhost:3001';
 
 
 
@@ -36,10 +36,11 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onJoin }) => {
     <div className="flex flex-col items-center justify-start h-full p-8 pt-20 overflow-y-auto">
 
       {/* 1. Header Text */}
-      <div className="text-center text-black mb-8">
-        <h1 className="text-6xl font-['Central_Sang_Bleu'] tracking-wide">CENTRAL</h1>
-        <p className="text-2xl font-['Central_Sang_Bleu'] tracking-normal my-1">78TH ANNIVERSARY</p>
-        <h2 className="text-5xl font-['Central_Sang_Bleu'] tracking-wide">FLOWER SHOW</h2>
+      <div className="text-center text-black mb-8 drop-shadow">
+        <h1 className="text-6xl font-['Central_Sang_Bleu'] tracking-wide drop-shadow-sm">CENTRAL</h1>
+        <p className="text-2xl font-['Central_Sang_Bleu'] tracking-normal my-1 drop-shadow-sm">78TH ANNIVERSARY</p>
+        <h2 className="text-5xl font-['Central_Sang_Bleu'] tracking-wide drop-shadow-sm">FLOWER</h2>
+        <h2 className="text-5xl font-['Central_Sang_Bleu'] tracking-wide drop-shadow-sm">SHOW</h2>
       </div>
 
       {/* 2. Instruction Box */}
@@ -231,67 +232,37 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName 
     // Added padding top to make space for absolute positioned elements
     <div className="relative flex flex-col h-full p-4 pt-12"> 
 
-      {/* --- Added Player Name (Top Left) --- */}
-      {/* Only show when actively playing */}
-      {isPlaying && (
-        <div className="absolute top-4 left-4 text-left">
-          <h2 className="text-xl font-['CPN'] font-bold text-white drop-shadow">{playerName}</h2>
-          <span className="text-sm text-teal-300 drop-shadow">Your turn</span>
-        </div>
-      )}
-
-      {/* --- Added Score and Time (Top Right) --- */}
-      {/* Only show when actively playing */}
-      {isPlaying && (
-        <div className="absolute top-4 right-4 text-right">
-          <div className="text-xl font-bold text-white font-['CPN_Condensed'] drop-shadow">
-              Score: {score}
-          </div>
-          <div className="text-lg font-bold text-yellow-400 font-['CPN_Condensed'] drop-shadow">
-              Time: {Math.ceil(remainingTime / 1000)}s
-          </div>
-        </div>
-      )}
-
       {/* Header Text (slightly smaller top padding) */}
       <div className="text-center text-white pt-8 mb-8 opacity-90"> {/* Reduced pt */}
-        <h1 className="text-6xl font-['Central_Sang_Bleu'] tracking-wide">CENTRAL</h1>
-        <p className="text-2xl font-['Central_Sang_Bleu'] tracking-normal my-1">78TH ANNIVERSARY</p>
-        <h2 className="text-5xl font-['Central_Sang_Bleu'] tracking-wide">FLOWER SHOW</h2>
+        <h1 className="text-6xl font-['Central_Sang_Bleu'] tracking-wide drop-shadow-lg">CENTRAL</h1>
+        <p className="text-2xl font-['Central_Sang_Bleu'] tracking-normal my-1 drop-shadow-lg">78TH ANNIVERSARY</p>
+        <h2 className="text-5xl font-['Central_Sang_Bleu'] tracking-wide drop-shadow-lg">FLOWER</h2>
+        <h2 className="text-5xl font-['Central_Sang_Bleu'] tracking-wide drop-shadow-lg">SHOW</h2>
       </div>
 
       {/* Main Controller Buttons (Unchanged) */}
       <main className="flex-grow flex items-center justify-around gap-4 px-4">
         <button
-          // =================================================================
-          // === ⬇️ แก้ไข 'disabled' ⬇️ ===
-          disabled={isQueued || prepareTime !== null || isWaitingForGame} // เพิ่ม isWaitingForGame
-          // === ⬆️ จบส่วนที่แก้ไข ⬆️ ===
+          disabled={isQueued || prepareTime !== null || isWaitingForGame}
           onMouseDown={() => handleMoveStart('left')}
           onMouseUp={() => handleMoveEnd('left')}
           onTouchStart={() => handleMoveStart('left')}
           onTouchEnd={() => handleMoveEnd('left')}
           className="btn btn-ghost flex-1 h-full flex items-center justify-center text-[#F49C9B] opacity-80 active:opacity-100 transition-all duration-100 select-none disabled:opacity-30 disabled:cursor-not-allowed"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-24 h-24" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M19 5v14L5 12z" />
-          </svg>
+          <img src="/images/arrow_button.png" alt="Left Arrow" className="block active:hidden w-32 h-32" />
+          <img src="/images/arrow_button_press.png" alt="Left Arrow Pressed" className="hidden active:block w-32 h-32" />
         </button>
         <button
-          
-          // =================================================================
-          // === ⬇️ แก้ไข 'disabled' ⬇️ ===
-          disabled={isQueued || prepareTime !== null || isWaitingForGame} // เพิ่ม isWaitingForGame
-          // === ⬆️ จบส่วนที่แก้ไข ⬆️ ===
+          disabled={isQueued || prepareTime !== null || isWaitingForGame}
           onMouseDown={() => handleMoveStart('right')}
           onMouseUp={() => handleMoveEnd('right')}
           onTouchStart={() => handleMoveStart('right')}
           onTouchEnd={() => handleMoveEnd('right')}
           className="btn btn-ghost flex-1 h-full flex items-center justify-center text-[#F49C9B] opacity-80 active:opacity-100 transition-all duration-100 select-none disabled:opacity-30 disabled:cursor-not-allowed"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-24 h-24" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M5 5v14l14-7z" />
-          </svg>
+          <img src="/images/arrow_button.png" alt="Right Arrow" className="block active:hidden w-32 h-32 transform scale-x-[-1]" />
+          <img src="/images/arrow_button_press.png" alt="Right Arrow Pressed" className="hidden active:block w-32 h-32 transform scale-x-[-1]" />
         </button>
       </main>
 
