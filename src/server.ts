@@ -49,6 +49,17 @@ let roundEndTime: number = 0;
 let isAssigningPlayer: boolean = false;
 let isRoundEnding: boolean = false;
 
+// ... ค่าคงที่ timeout ...
+let ueNotReadyTimeout: ReturnType<typeof setTimeout> | null = null;
+// =================================================================
+// === ⬇️ ตรวจสอบว่ามีบรรทัดนี้อยู่ และสะกดถูกต้อง ⬇️ ===
+//
+// Flag บอกว่าเรากำลังรอ UE ตอบรับว่าพร้อม (หลัง UE ส่ง "notready")
+let isWaitingForUeReady: boolean = false; // <--- ต้องมีบรรทัดนี้
+//
+// === ⬆️ จบส่วนที่ตรวจสอบ ⬆️ ===
+// =================================================================
+
 // --- CORE FUNCTIONS ---
 
 /**
@@ -231,6 +242,18 @@ const prepareRound = (player: Player) => {
   // **FIX 6**: ครอบด้วย try...catch
   try {
     console.log(`Player ${player.name} is preparing to play.`);
+
+    // =================================================================
+    // === ⬇️ กำหนด activePlayer เร็วขึ้นตรงนี้ ⬇️ ===
+    activePlayer = player; // ตั้งค่าชั่วคราวเพื่อให้ 'notready' หาเจอ
+    isWaitingForUeReady = false; // ตรวจสอบว่า flag การรอถูกรีเซ็ตสำหรับผู้เล่นใหม่
+    if (ueNotReadyTimeout) { // เคลียร์ timeout ที่อาจค้างอยู่
+      clearTimeout(ueNotReadyTimeout);
+      ueNotReadyTimeout = null;
+    }
+    // === ⬆️ จบส่วนที่แก้ไข ⬆️ ===
+    // =================================================================
+
     io.to(player.id).emit('prepareToPlay', { duration: PREPARE_DURATION_MS });
 
     // **MODIFIED: Send roundStart to UE immediately at countdown start**
@@ -242,7 +265,28 @@ const prepareRound = (player: Player) => {
     }
 
     setTimeout(() => {
-      startRound(player);
+      // =================================================================
+        // === ⬇️ เพิ่มการตรวจสอบนี้ตรงนี้ ⬇️ ===
+        //
+        // ตรวจสอบ *อีกครั้ง* ว่า UE ส่ง 'notready' มา *ระหว่าง* การนับถอยหลังเตรียมตัวหรือไม่
+        if (isWaitingForUeReady && activePlayer && activePlayer.id === player.id) {
+            console.log(`Prepare duration ended for ${player.name}, but still waiting for UE ready signal (received 'notready'). Delaying startRound.`);
+            // ยังไม่ต้องเริ่มรอบ รอ 'gamegotolandingpage' หรือ timeout 5 นาที
+        } else if (activePlayer && activePlayer.id !== player.id) {
+            // กรณีนี้จัดการหาก active player เปลี่ยนไปโดยไม่คาดคิดระหว่าง prepare
+             console.warn(`Prepare duration ended for ${player.name}, but active player is now ${activePlayer?.name}. Aborting startRound for ${player.name}.`);
+             // อาจต้องแน่ใจว่าผู้เล่นที่ถูกต้องได้เริ่มในที่สุด
+             // แต่ตอนนี้ แค่ป้องกันไม่ให้คนผิดเริ่ม
+             isAssigningPlayer = false; // ปลดล็อคเพราะความพยายามนี้ล้มเหลว
+        }
+         else {
+            // ถ้าเรา *ไม่ได้* กำลังรอ UE ให้ดำเนินการเริ่มรอบ
+            console.log(`Prepare duration ended for ${player.name}. Proceeding to startRound.`);
+            startRound(player); // เรียก startRound เฉพาะเมื่อ UE ไม่ได้บอกว่า "notready"
+        }
+        //
+        // === ⬆️ จบการตรวจสอบที่เพิ่มเข้ามา ⬆️ ===
+        // =================================================================
     }, PREPARE_DURATION_MS);
 
   } catch (error) {
@@ -258,47 +302,72 @@ const prepareRound = (player: Player) => {
  * เริ่มรอบใหม่สำหรับผู้เล่นที่กำหนด
  * @param player ผู้เล่นที่ถึงตา
  */
+// ในไฟล์ server.ts
 const startRound = (player: Player) => {
-   // **FIX 6**: ครอบด้วย try...catch
-  try {
-    activePlayer = player;
-    activePlayer.roundEndedNormally = undefined; // รีเซ็ต flag
-    roundEndTime = Date.now() + ROUND_DURATION_MS;
-    isRoundEnding = false; // ตรวจสอบให้แน่ใจว่า flag การจบถูกรีเซ็ต
+   try {
+    // ตรวจสอบความปลอดภัย: ตรวจสอบว่าผู้เล่นที่ส่งเข้ามาเป็น active player ที่ตั้งใจไว้ในปัจจุบันหรือไม่
+    if (!activePlayer || activePlayer.id !== player.id) {
+        console.warn(`startRound called for ${player.name}, but activePlayer is ${activePlayer?.name}. Aborting.`);
+        isAssigningPlayer = false; // ปลดล็อคถ้าเรากำลังยกเลิก
+        return;
+    }
 
+    // ตรวจสอบว่าเรายังรอ UE อยู่หรือไม่ (อาจเกิดขึ้นได้หาก timer 5 นาทีเรียกฟังก์ชันนี้)
+    if (isWaitingForUeReady) {
+        console.log(`startRound called for ${player.name}, but still waiting for UE ready signal.`);
+        // ไม่ต้องดำเนินการต่อ isAssigningPlayer ยังคงเป็น true
+        return;
+    }
+
+    // --- รอบกำลังจะเริ่ม *จริงๆ* ณ ตอนนี้ ---
     console.log(`Starting round for ${player.name}. Duration: ${ROUND_DURATION_MS / 1000}s`);
 
-    io.to(player.id).emit('yourTurn');
-    
-    // **MODIFIED: Removed from here (moved to prepareRound)**
-    // if (gameClientSocket) {
-    //   gameClientSocket.emit('roundStart', { playerName: player.name });
-    // }
+    // ตรวจสอบว่า flags ถูกต้องสำหรับรอบที่กำลังดำเนินอยู่
+    // activePlayer = player; // ลบออก - ตั้งค่าแล้วใน prepareRound
+    activePlayer.roundEndedNormally = undefined;
+    roundEndTime = Date.now() + ROUND_DURATION_MS;
+    isRoundEnding = false;
+    isWaitingForUeReady = false; // รีเซ็ต flag การรอ *ที่นี่*
+    if (ueNotReadyTimeout) { // เคลียร์ timer 5 นาที *ที่นี่*
+       clearTimeout(ueNotReadyTimeout);
+       ueNotReadyTimeout = null;
+    }
 
+    // แจ้ง controller
+    io.to(player.id).emit('yourTurn');
+
+    // เริ่ม timer เกม
     roundTimer = setTimeout(handleTimeUp, ROUND_DURATION_MS);
 
+    // เริ่ม timer นับถอยหลัง
     if (countdownTimer) clearInterval(countdownTimer);
     countdownTimer = setInterval(() => {
       const remaining = Math.max(0, roundEndTime - Date.now());
-      if (activePlayer && activePlayer.id === player.id) { // ตรวจสอบว่าเป็นผู้เล่นที่ถูกต้อง
+      // ตรวจสอบว่า activePlayer ยังอยู่และตรงกันก่อนส่งข้อมูล
+      if (activePlayer && activePlayer.id === player.id) {
         io.to(activePlayer.id).emit('timeUpdate', { remaining });
       } else {
-        clearInterval(countdownTimer!); // หยุด timer หาก active player เปลี่ยนไปโดยไม่คาดคิด
+        clearInterval(countdownTimer!);
         countdownTimer = null;
       }
     }, 1000);
 
   } catch (error) {
      console.error(`Error during startRound for ${player.name}:`, error);
-     // พยายามกู้คืน: บังคับจบ, แจ้งเตือนผู้เล่น, เริ่มคนถัดไป
-     io.to(player.id).emit('error', { message: 'Failed to properly start your round.' });
+     io.to(player.id)?.emit('error', { message: 'Failed to properly start your round.' });
+     // พยายาม force end หากผู้เล่นตรงกัน
      if (activePlayer && activePlayer.id === player.id) {
         forceEndRound('Error during startRound');
-     } else {
-       startNextPlayer(); // ลองเริ่มคนถัดไปหาก active player ไม่ได้ถูกตั้งค่าอย่างถูกต้อง
      }
+     // ตรวจสอบให้แน่ใจว่าปลดล็อคแม้เกิด error
+     isAssigningPlayer = false;
+
   } finally {
-     isAssigningPlayer = false; // **FIX 7**: ปลด lock หลังจากพยายามเริ่ม
+     // ปลดล็อคการกำหนดค่า *เฉพาะ* เมื่อ startRound ทำงานสำเร็จหรือเกิด error ที่นี่
+     // มันยังคงเป็น true ถ้า startRound return เร็วกว่ากำหนดเนื่องจาก isWaitingForUeReady
+     if (!isWaitingForUeReady) { // ปลดล็อคเฉพาะเมื่อเราไม่ได้ออกกลางคันเนื่องจากการรอ
+        isAssigningPlayer = false;
+     }
   }
 };
 
@@ -341,6 +410,49 @@ io.on('connection', (socket: Socket) => {
           activePlayer.score = data.score;
           io.to(activePlayer.id).emit('scoreUpdate', { score: data.score });
         }
+      });
+
+      // ตรวจสอบว่า listener นี้อยู่ในตำแหน่งที่ถูกต้องและสะกดถูก
+      // ในไฟล์ server.ts, ภายใน io.on('connection'...), ภายในส่วน register ของ game_client
+      socket.on('notready', () => {
+          // เพิ่มการตรวจสอบ: ตรวจสอบให้แน่ใจว่า activePlayer ไม่ใช่ null และเราไม่ได้กำลังรออยู่แล้ว
+          if (socket.id === gameClientSocket?.id && activePlayer && !isWaitingForUeReady) {
+              console.warn(`✅ UE reported "notready" for player ${activePlayer.name}. Setting wait flag.`);
+              isWaitingForUeReady = true;
+
+              io.to(activePlayer.id).emit('waitingForGame');
+
+              // หยุด timer ที่อาจถูกเริ่มโดย startRound หากมันทำงานไปชั่วครู่
+              if (roundTimer) clearTimeout(roundTimer);
+              roundTimer = null;
+              if (countdownTimer) clearInterval(countdownTimer);
+              countdownTimer = null;
+
+              // เคลียร์และตั้งค่า timer retry 5 นาที
+              if (ueNotReadyTimeout) clearTimeout(ueNotReadyTimeout);
+              const playerToRetry = activePlayer; // เก็บ context ผู้เล่นปัจจุบัน
+
+              ueNotReadyTimeout = setTimeout(() => {
+                  console.log(`5-minute UE ready timeout reached for ${playerToRetry.name}. Retrying...`);
+                  ueNotReadyTimeout = null;
+                  // ตรวจสอบว่า state ยังคงถูกต้องสำหรับการ retry หรือไม่
+                  if (activePlayer && activePlayer.id === playerToRetry.id && isWaitingForUeReady) {
+                      console.log(`Retrying startRound for ${playerToRetry.name} after timeout.`);
+                      // isWaitingForUeReady = false; // ให้ startRound รีเซ็ตเอง
+                      startRound(activePlayer); // เรียก startRound อีกครั้ง
+                  } else {
+                      console.warn(`5-min retry timeout fired, but state has changed (player: ${activePlayer?.name}, waiting: ${isWaitingForUeReady}).`);
+                      // ถ้า state เปลี่ยนไป, ตรวจสอบให้แน่ใจว่าล็อคไม่ถูกค้างไว้ตลอดไป
+                      if(isAssigningPlayer && (!activePlayer || activePlayer.id !== playerToRetry.id)) {
+                          isAssigningPlayer = false;
+                      }
+                  }
+              // }, UE_READY_TIMEOUT_MS); // ใช้ค่าคงที่
+              }, 5000); // คงไว้ 5 วินาทีเพื่อทดสอบ - อย่าลืมเปลี่ยนกลับ
+
+          } else {
+              console.log(`'notready' received but ignored. Conditions: gameClient=${socket.id === gameClientSocket?.id}, activePlayer=${!!activePlayer}, !isWaiting=${!isWaitingForUeReady}`);
+          }
       });
 
       // =================================================================
