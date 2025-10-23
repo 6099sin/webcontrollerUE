@@ -171,6 +171,14 @@ const processEndOfRound = (finalScore: number) => {
       gameClientSocket.emit('recordGameSession', gameResult);
     } else {
       console.warn(`Cannot send recordGameSession for ${endedPlayer.name}: Game client disconnected.`);
+      // =================================================================
+      // === ⬇️ เพิ่มโค้ดส่วนนี้ ⬇️ ===
+      // **สำคัญมาก**: ถ้า UE ไม่ได้เชื่อมต่อ (หลุด)
+      // เราจะไม่มีวันได้รับ 'gamegotolandingpage'
+      // ดังนั้นเราต้องสั่งเริ่มคนถัดไปทันที เพื่อไม่ให้คิวค้าง
+      startNextPlayer(); 
+      // === ⬆️ จบส่วนที่เพิ่ม ⬆️ ===
+      // =================================================================
     }
 
     // 3. แจ้ง web controller
@@ -182,8 +190,6 @@ const processEndOfRound = (finalScore: number) => {
   } finally {
     isRoundEnding = false; // รีเซ็ต flag *หลังจาก* ประมวลผลเสร็จสิ้น
 
-    // 4. เริ่มผู้เล่นคนถัดไป (ถ้ามี)
-    startNextPlayer();
   }
 };
 
@@ -336,6 +342,26 @@ io.on('connection', (socket: Socket) => {
           io.to(activePlayer.id).emit('scoreUpdate', { score: data.score });
         }
       });
+
+      // =================================================================
+      // === ⬇️ เพิ่มโค้ดส่วนนี้ ⬇️ ===
+      //
+      // รอรับสัญญาณว่า UE กลับไปหน้า Landing Page และพร้อมสำหรับผู้เล่นใหม่
+      socket.on('gamegotolandingpage', () => {
+        if (socket.id === gameClientSocket?.id) {
+          console.log('✅ UE is on landing page and ready for next player.');
+          
+          // เมื่อ UE พร้อมเท่านั้น จึงจะเริ่มผู้เล่นคนถัดไป
+          // (ตรวจสอบให้แน่ใจว่าไม่ได้กำลังอยู่ในกระบวนการจบรอบ หรือมีคนเล่นอยู่)
+          if (!isRoundEnding && !activePlayer) {
+            startNextPlayer();
+          } else {
+            console.warn('UE sent gamegotolandingpage, but server is still busy.');
+          }
+        }
+      });
+      // === ⬆️ จบส่วนที่เพิ่ม ⬆️ ===
+      // =================================================================
 
       if (!activePlayer && playerQueue.length === 0) {
         gameClientSocket.emit('waitingForPlayers');
