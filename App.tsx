@@ -7,8 +7,8 @@ import './src/styles/background.css';
 // This is a global from the script tag in index.html
 declare const io: (uri: string) => Socket;
 
-// const SOCKET_SERVER_URL = 'https://ue-web-controller-712649324249.asia-southeast1.run.app';
-const SOCKET_SERVER_URL = 'http://localhost:3001';
+const SOCKET_SERVER_URL = 'https://ue-web-controller-712649324249.asia-southeast1.run.app';
+// const SOCKET_SERVER_URL = 'http://localhost:3001';
 
 
 
@@ -77,7 +77,7 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onJoin }) => {
         <button
           type="submit"
           disabled={!name.trim()}
-          className="btn w-full px-4 py-4 text-3xl font-['Central_Sang_Bleu'] font-bold text-white bg-[#F49C9B] rounded-full shadow-lg hover:bg-opacity-80 active:bg-opacity-100 transition-all disabled:bg-gray-400"
+          className="btn w-full px-4 py-4 text-3xl font-['Central_Sang_Bleu'] font-bold text-white bg-[#F49C9B] rounded-full shadow-lg hover:bg-opacity-80 active:bg-opacity-100 transition-all disabled:bg-gray-400 border-2 border-white"
         >
           START
         </button>
@@ -351,12 +351,12 @@ const EndScreen: React.FC<EndScreenProps> = ({ finalScore, playerName }) => {
       {/* 1. Title */}
       <div className="text-center text-white mb-8 mt-10">
         <h1 className="text-5xl md:text-5x1 font-['Central Sang Bleu'] mb-8 text-[#f69994] ">YOU WIN!</h1>
-        <h1 className="text-3xl md:text-5x1 font-['Central Sang Bleu'] tracking-wider mb-8 text-[#f69994] ">Congratulations!</h1>
-        <h2 className="text-2xl font-['Central Sang Bleu'] font-bold mt-1 text-[#f69994] drop-shadow-sm">{playerName}</h2>
+        <h1 className="text-3xl md:text-5x1 font-['Central Sang Bleu'] tracking-wider mb-14 text-[#f69994] ">Congratulations!</h1>
+        <h2 className="text-2xl font-['Central Sang Bleu'] mb-1 text-[#f69994] drop-shadow-sm">{playerName}</h2>
       </div>
 
       {/* 2. Score Display */}
-      <div className="relative w-64 h-64 flex items-center justify-center my-8">
+      <div className="relative w-60 h-60 flex items-center justify-center my-8">
         <img src="/images/LogoCBS.png" alt="Score Frame" className="absolute w-full h-full" />
         {/* Score Text */}
         <div className="relative z-10 flex flex-col items-center">
@@ -373,16 +373,21 @@ const EndScreen: React.FC<EndScreenProps> = ({ finalScore, playerName }) => {
 
 const WaitingScreen: React.FC = () => {
   return (
-    <div className="flex flex-col items-center justify-center h-full p-4 text-center relative">
+    <div className="flex flex-col h-full text-center">
       {/* "Please wait a moment" text in a white rounded box */}
-      <div className="alert alert-neutral px-8 py-3 rounded-full shadow-lg">
-        <h1 className="text-3xl font-['CPN'] font-bold text-black ">กรุณารอสักครู่</h1>
+      <div className="pt-20 flex justify-center mt-20">
+        <div className="alert alert-neutral inline-block px-7 py-3 rounded-full shadow-lg">
+          <h1 className="text-3xl font-['CPN'] font-bold text-black ">กรุณารอสักครู่</h1>
+        </div>
       </div>
 
-      {/* Radial Spinner with FrameLoading.png background */}
-      <div className="relative flex items-center justify-center w-48 h-48">
-        <img src="/images/FrameLoading.png" alt="Loading Frame" className="absolute w-full h-full" />
-        <img src="/images/Spinner.svg" alt="Loading Spinner" className="animate-spin w-20 h-20" />      </div>
+      {/* Spinner centered in the remaining space */}
+      <div className="flex-grow flex items-center justify-center pb-20">
+        <div className="relative flex items-center justify-center w-48 h-48 mb-20">
+          <img src="/images/FrameLoading.png" alt="Loading Frame" className="absolute w-full h-full" />
+          <img src="/images/Spinner.svg" alt="Loading Spinner" className="animate-spin w-20 h-20" />
+        </div>
+      </div>
     </div>
   );
 };
@@ -492,7 +497,7 @@ function App() {
 
   const renderContent = () => {
     // บังคับให้แสดง EndScreen เพื่อดูตัวอย่างชั่วคราว
-    // return <ControllerScreen socket={socket.current} playerName="cd" />;
+    // return <ControllerScreen socket="3000" playerName="cd" />;
     // return <SetupScreen onJoin={handleJoin} />;
     // return <WaitingScreen />;
     // return <EndScreen finalScore={123} playerName="Test Player" />;
