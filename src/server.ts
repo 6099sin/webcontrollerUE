@@ -49,6 +49,20 @@ let roundEndTime: number = 0;
 let isAssigningPlayer: boolean = false;
 let isRoundEnding: boolean = false;
 
+// =================================================================
+// === ⬇️ เพิ่มโค้ดส่วนนี้ ⬇️ ===
+//
+// 5 นาที (ในหน่วยมิลลิวินาที)
+const UE_READY_TIMEOUT_MS = 5 * 60 * 1000; 
+
+// ตัวจับเวลาสำหรับ Retry 5 นาที
+let ueNotReadyTimeout: ReturnType<typeof setTimeout> | null = null;
+// Flag บอกว่าเรากำลังรอ UE ตอบรับว่าพร้อม (หลัง UE ส่ง "notready")
+let isWaitingForUeReady: boolean = false;
+//
+// === ⬆️ จบส่วนที่เพิ่ม ⬆️ ===
+// =================================================================
+
 // --- CORE FUNCTIONS ---
 
 /**
@@ -266,6 +280,19 @@ const startRound = (player: Player) => {
     roundEndTime = Date.now() + ROUND_DURATION_MS;
     isRoundEnding = false; // ตรวจสอบให้แน่ใจว่า flag การจบถูกรีเซ็ต
 
+    // =================================================================
+    // === ⬇️ เพิ่มโค้ดส่วนนี้ ⬇️ ===
+    //
+    // รีเซ็ตสถานะการรอ UE (เพราะเรากำลังเริ่มรอบ)
+    isWaitingForUeReady = false; 
+    if (ueNotReadyTimeout) { // เคลียร์ timer 5 นาที ถ้ามี
+       clearTimeout(ueNotReadyTimeout);
+       ueNotReadyTimeout = null;
+    }
+    //
+    // === ⬆️ จบส่วนที่เพิ่ม ⬆️ ===
+    // =================================================================
+
     console.log(`Starting round for ${player.name}. Duration: ${ROUND_DURATION_MS / 1000}s`);
 
     io.to(player.id).emit('yourTurn');
@@ -343,23 +370,82 @@ io.on('connection', (socket: Socket) => {
         }
       });
 
-      // =================================================================
-      // === ⬇️ เพิ่มโค้ดส่วนนี้ ⬇️ ===
-      //
-      // รอรับสัญญาณว่า UE กลับไปหน้า Landing Page และพร้อมสำหรับผู้เล่นใหม่
+      // ⬇️ แทนที่ 'gamegotolandingpage' listener เดิมด้วยโค้ดนี้ ⬇️
+
+      // รอรับสัญญาณว่า UE กลับไปหน้า Landing Page และพร้อม
       socket.on('gamegotolandingpage', () => {
         if (socket.id === gameClientSocket?.id) {
-          console.log('✅ UE is on landing page and ready for next player.');
+
+          // --- ⬇️ กรณีที่ 1 (ใหม่): UE ตอบว่าพร้อมสำหรับ "ผู้เล่นปัจจุบัน" ---
+          if (isWaitingForUeReady && activePlayer) {
+            console.log(`✅ UE is now ready for *current* player: ${activePlayer.name}`);
+            isWaitingForUeReady = false;
+
+            // เคลียร์ตัวจับเวลา 5 นาที (เพราะ UE ตอบกลับมาก่อน)
+            if (ueNotReadyTimeout) {
+              clearTimeout(ueNotReadyTimeout);
+              ueNotReadyTimeout = null;
+            }
+            
+            // เริ่มรอบสำหรับผู้เล่นคนนี้
+            startRound(activePlayer);
+          }
           
-          // เมื่อ UE พร้อมเท่านั้น จึงจะเริ่มผู้เล่นคนถัดไป
-          // (ตรวจสอบให้แน่ใจว่าไม่ได้กำลังอยู่ในกระบวนการจบรอบ หรือมีคนเล่นอยู่)
-          if (!isRoundEnding && !activePlayer) {
+          // --- ⬇️ กรณีที่ 2 (เดิม): UE พร้อมสำหรับ "ผู้เล่นคนถัดไป" ---
+          else if (!isRoundEnding && !activePlayer) {
+            console.log('✅ UE is on landing page and ready for *next* player.');
             startNextPlayer();
-          } else {
-            console.warn('UE sent gamegotolandingpage, but server is still busy.');
+          } 
+          
+          // --- ⬇️ กรณีอื่นๆ ---
+          else {
+            console.warn('UE sent gamegotolandingpage, but server state is unexpected.', { 
+              isWaitingForUeReady, 
+              isRoundEnding, 
+              activePlayerName: activePlayer?.name 
+            });
           }
         }
       });
+
+      // === ⬇️ เพิ่มโค้ดส่วนนี้ (Listener ใหม่) ⬇️ ===
+      //
+      // รอรับสัญญาณ "notready" จาก UE
+      socket.on('notready', () => {
+        // ต้องเป็น UE client, มีผู้เล่นกำลังเล่นอยู่, และเราไม่ได้กำลังรออยู่ก่อนแล้ว
+        if (socket.id === gameClientSocket?.id && activePlayer && !isWaitingForUeReady) {
+          console.warn(`UE reported "notready" for player ${activePlayer.name}.`);
+          isWaitingForUeReady = true;
+
+          // 1. บอกให้ Controller (หน้าเว็บ) รอ
+          io.to(activePlayer.id).emit('waitingForGame'); // (เราจะไปเพิ่มส่วนนี้ใน App.tsx)
+
+          // 2. "หยุด" รอบที่กำลังจะเริ่มชั่วคราว (เคลียร์ timer 30 วินาที)
+          if (roundTimer) clearTimeout(roundTimer);
+          roundTimer = null;
+          if (countdownTimer) clearInterval(countdownTimer);
+          countdownTimer = null;
+
+          // 3. เคลียร์ตัวจับเวลา retry 5 นาที (ถ้ามีของเก่าค้าง)
+          if (ueNotReadyTimeout) clearTimeout(ueNotReadyTimeout);
+
+          // 4. ตั้งค่าตัวจับเวลา 5 นาที เพื่อลอง "startRound" อีกครั้ง
+          const playerToRetry = activePlayer; // เก็บ context ของผู้เล่นไว้
+          ueNotReadyTimeout = setTimeout(() => {
+            console.log(`5-minute UE ready timeout reached for ${playerToRetry.name}. Retrying...`);
+            ueNotReadyTimeout = null; // เคลียร์ timer ref
+
+            // ตรวจสอบว่าผู้เล่นยังอยู่ และยังคงรออยู่หรือไม่
+            if (activePlayer && activePlayer.id === playerToRetry.id && isWaitingForUeReady) {
+              isWaitingForUeReady = false; // รีเซ็ต flag (เรากำลังจะลองใหม่)
+              startRound(activePlayer); // เรียก startRound อีกครั้ง
+            } else {
+              console.warn(`5-min retry timeout fired, but state has changed. (Player: ${activePlayer?.name}, Waiting: ${isWaitingForUeReady})`);
+            }
+          }, UE_READY_TIMEOUT_MS);
+        }
+      });
+      //
       // === ⬆️ จบส่วนที่เพิ่ม ⬆️ ===
       // =================================================================
 
@@ -432,6 +518,16 @@ io.on('connection', (socket: Socket) => {
     if (gameClientSocket && socket.id === gameClientSocket.id) {
         console.log("Unreal Engine game client has disconnected.");
         gameClientSocket = null;
+        
+        // =================================================================
+        // === ⬇️ เพิ่มโค้ดส่วนนี้ ⬇️ ===
+        if (ueNotReadyTimeout) { // เคลียร์ timer 5 นาที
+            clearTimeout(ueNotReadyTimeout);
+            ueNotReadyTimeout = null;
+        }
+        isWaitingForUeReady = false;
+        // === ⬆️ จบส่วนที่เพิ่ม ⬆️ ===
+
         // บังคับจบรอบปัจจุบันหาก UE หลุด
         if(activePlayer) {
           forceEndRound('Game client disconnected'); // ใช้ forceEndRound

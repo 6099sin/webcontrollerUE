@@ -102,6 +102,15 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName 
   const [remainingTime, setRemainingTime] = useState(0);
   const [prepareTime, setPrepareTime] = useState<number | null>(null);
 
+  // =================================================================
+  // === ⬇️ เพิ่มโค้ดส่วนนี้ (State ใหม่) ⬇️ ===
+  //
+  // State เพื่อบอกว่ากำลังรอ UE "พร้อม"
+  const [isWaitingForGame, setIsWaitingForGame] = useState(false);
+  //
+  // === ⬆️ จบส่วนที่เพิ่ม ⬆️ ===
+  // =================================================================
+
   const handleMoveStart = (direction: 'left' | 'right') => {
     socket?.emit('move', { direction, action: 'start' });
   };
@@ -148,6 +157,13 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName 
     };
 
     const onGameOver = () => {
+
+      // =================================================================
+      // === ⬇️ เพิ่มโค้ดส่วนนี้ ⬇️ ===
+      setIsWaitingForGame(false); // UE พร้อมแล้ว ให้ซ่อนหน้าจอรอนี้
+      // === ⬆️ จบส่วนที่เพิ่ม ⬆️ ===
+      // =================================================================
+
       // Clear queue info when game ends
       setQueuePosition(null);
       setQueueTotal(null);
@@ -160,6 +176,23 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName 
     const onTimeUpdate = (data: { remaining: number }) => {
       setRemainingTime(data.remaining);
     };
+    
+    // =================================================================
+      // === ⬇️ เพิ่มโค้ดส่วนนี้ (Listener ใหม่) ⬇️ ===
+      //
+      // รับสัญญาณจาก server ว่า UE ไม่พร้อม
+      const onWaitingForGame = () => {
+          console.log('Client: Server says UE is not ready. Waiting...');
+          setIsWaitingForGame(true);
+          
+          // เราอาจจะกำลังอยู่ใน countdown 'Get Ready'
+          // ให้ยกเลิก countdown นั้น แล้วไปหน้าจอรอแทน
+          setPrepareTime(null); 
+          setQueuePosition(0); // เรายังเป็นคิวที่ 0
+      };
+      //
+      // === ⬆️ จบส่วนที่เพิ่ม ⬆️ ===
+      // =================================================================
 
     socket.on('queueUpdate', onQueueUpdate);
     socket.on('prepareToPlay', onPrepareToPlay);
@@ -167,6 +200,10 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName 
     socket.on('gameOver', onGameOver);
     socket.on('scoreUpdate', onScoreUpdate);
     socket.on('timeUpdate', onTimeUpdate);
+    // =================================================================
+    // === ⬇️ เพิ่มโค้ดส่วนนี้ ⬇️ ===
+    socket.on('waitingForGame', onWaitingForGame);
+    // === ⬆️ จบส่วนที่เพิ่ม ⬆️ ===
 
     return () => {
       socket.off('queueUpdate', onQueueUpdate);
@@ -175,8 +212,16 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName 
       socket.off('gameOver', onGameOver);
       socket.off('scoreUpdate', onScoreUpdate);
       socket.off('timeUpdate', onTimeUpdate);
+
+      // =================================================================
+      // === ⬇️ เพิ่มโค้ดส่วนนี้ ⬇️ ===
+      socket.off('waitingForGame', onWaitingForGame);
+      // === ⬆️ จบส่วนที่เพิ่ม ⬆️ ===
+      // =================================================================
     };
   }, [socket]);
+
+
 
   // Check if player is waiting (in queue or preparing)
   const isQueued = queuePosition === null || queuePosition > 0;
@@ -218,7 +263,10 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName 
       {/* Main Controller Buttons (Unchanged) */}
       <main className="flex-grow flex items-center justify-around gap-4 px-4">
         <button
-          disabled={isQueued || prepareTime !== null} // Also disable during prepare countdown
+          // =================================================================
+          // === ⬇️ แก้ไข 'disabled' ⬇️ ===
+          disabled={isQueued || prepareTime !== null || isWaitingForGame} // เพิ่ม isWaitingForGame
+          // === ⬆️ จบส่วนที่แก้ไข ⬆️ ===
           onMouseDown={() => handleMoveStart('left')}
           onMouseUp={() => handleMoveEnd('left')}
           onTouchStart={() => handleMoveStart('left')}
@@ -230,7 +278,11 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName 
           </svg>
         </button>
         <button
-          disabled={isQueued || prepareTime !== null} // Also disable during prepare countdown
+          
+          // =================================================================
+          // === ⬇️ แก้ไข 'disabled' ⬇️ ===
+          disabled={isQueued || prepareTime !== null || isWaitingForGame} // เพิ่ม isWaitingForGame
+          // === ⬆️ จบส่วนที่แก้ไข ⬆️ ===
           onMouseDown={() => handleMoveStart('right')}
           onMouseUp={() => handleMoveEnd('right')}
           onTouchStart={() => handleMoveStart('right')}
@@ -265,6 +317,24 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName 
           </div>
         </div>
       )}
+      
+      {/* ================================================================= */}
+      {/* === ⬇️ เพิ่มโค้ดส่วนนี้ (Overlay ใหม่) ⬇️ === */}
+      {/*
+        Overlay สำหรับรอ UE "พร้อม"
+      */}
+      {isWaitingForGame && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60 z-20">
+          <div className="bg-gray-800 bg-opacity-90 text-center px-6 py-4 rounded-lg border border-gray-700">
+            {/* เราสามารถใช้ JoiningDots component ซ้ำได้ */}
+            <JoiningDots baseText="Syncing with game" />
+            <div className="text-sm text-gray-400 mt-2">Please wait a moment...</div>
+          </div>
+        </div>
+      )}
+      {/* === ⬆️ จบส่วนที่เพิ่ม ⬆️ === */}
+      {/* ================================================================= */}
+
     </div>
   );
 };
