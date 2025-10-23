@@ -7,8 +7,8 @@ import './src/styles/background.css';
 // This is a global from the script tag in index.html
 declare const io: (uri: string) => Socket;
 
-const SOCKET_SERVER_URL = 'https://ue-web-controller-712649324249.asia-southeast1.run.app';
-// const SOCKET_SERVER_URL = 'http://localhost:3001';
+// const SOCKET_SERVER_URL = 'https://ue-web-controller-712649324249.asia-southeast1.run.app';
+const SOCKET_SERVER_URL = 'http://localhost:3001';
 
 
 
@@ -382,16 +382,23 @@ function App() {
     });
 
     socket.current.on('gameAvailable', () => {
-        // Log 3: เมื่อ gameAvailable มาถึง
-        console.log(`CLIENT: --- Received gameAvailable event. Current gameState: ${gameState}`); // ใช้ state variable โดยตรง
-
-        // --- LOGIC ที่แก้ไข ---
-        if (gameState === GameState.WAITING_QUEUE) {
-          console.log(`CLIENT: --- Switching gameState to SETUP because it was WAITING_QUEUE`);
-          setGameState(GameState.SETUP);
-        } else {
-            console.log(`CLIENT: --- NOT switching gameState from ${gameState} on gameAvailable.`);
-        }
+        // --- LOGIC ที่แก้ไข (FIXED LOGIC) ---
+        // เราใช้ functional update (prevState => ...) เพื่อให้ได้ค่า state ล่าสุดเสมอ
+        // ป้องกันปัญหา Stale State
+        setGameState((currentGameState) => {
+            console.log(`CLIENT: --- Received gameAvailable event. Current gameState: ${currentGameState}`);
+            
+            // ตรวจสอบ state ปัจจุบัน (ไม่ใช่ state เก่า)
+            if (currentGameState === GameState.WAITING_QUEUE) {
+                console.log(`CLIENT: --- Switching gameState to SETUP.`);
+                return GameState.SETUP;
+            } else {
+                // ถ้า state เป็น CONTROLLER หรือ ENDGAME หรืออื่นๆ
+                // ก็ไม่ต้องทำอะไร ให้คง state เดิมไว้
+                console.log(`CLIENT: --- NOT switching gameState from ${currentGameState}.`);
+                return currentGameState;
+            }
+        });
     });
 
     // Cleanup on component unmount
