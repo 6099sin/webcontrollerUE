@@ -101,6 +101,13 @@ const ControllerScreen: React.FC<ControllerScreenProps> = ({ socket, playerName 
   const [score, setScore] = useState(0);
   const [remainingTime, setRemainingTime] = useState(0);
   const [prepareTime, setPrepareTime] = useState<number | null>(null);
+  // =================================================================
+  // === ⬇️ เพิ่มบรรทัดนี้เพื่อประกาศ state ⬇️ ===
+  //
+  const [isWaitingForGame, setIsWaitingForGame] = useState(false); // <--- ประกาศ state ตรงนี้
+  //
+  // === ⬆️ จบส่วนที่เพิ่ม ⬆️ ===
+  // =================================================================
 
   // =================================================================
   // === ⬇️ เพิ่มโค้ดส่วนนี้ (State ใหม่) ⬇️ ===
