@@ -44,9 +44,9 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onJoin }) => {
 
       {/* 2. Instruction Box */}
       {/* Using the pink color from the image: #F49C9B */}
-      <div className="bg-[#F49C9B] bg-opacity-95 text-black p-5 rounded-2xl mb-8 w-full max-w-xs shadow-md">
-        <h3 className="text-2xl font-['CPN'] font-bold text-center mb-2">วิธีการเล่นเกม</h3>
-        <p className="text-base font-['CPN'] text-center">
+      <div className="bg-[#f5a9a4] bg-opacity-95 text-black p-5 rounded-2xl mb-8 w-full max-w-xs shadow-md">
+        <h4 className="text-2xl font-['CPN'] font-bold text-center text-white mb-2">วิธีการเล่นเกม</h4>
+        <p className="text-base font-['CPN'] text-center text-white ">
           ขยับซ้าย-ขวา รับดอกไม้ และโบนัสไอเท็มx2 ให้ได้มากที่สุดใน 30 วินาที
         </p>
         
@@ -55,17 +55,16 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onJoin }) => {
             I will use emoji and styled text as placeholders.
         */}
         <div className="flex justify-around items-center mt-4">
-          <span className="text-3xl">🌸</span>
-          <span className="text-3xl">🌺</span>
-          <span className="text-3xl">🌼</span>
-          {/* Placeholder for the x2 icon */}
-          <span className="text-2xl font-bold bg-white px-2 py-1 rounded-md shadow-sm">x2</span>
+          <img src="/images/Flower_AWintro1.png" alt="Flower icon 1" className="h-16 w-16" />
+          <img src="/images/Flower_AWintro2.png" alt="Flower icon 2" className="h-16 w-16" />
+          <img src="/images/Flower_AWintro3.png" alt="Flower icon 3" className="h-16 w-16" />
+          <img src="/images/Flower_AWintro4.png" alt="x2 Bonus icon" className="h-16 w-16" />
         </div>
       </div>
 
       {/* 3. Form */}
       <form onSubmit={handleSubmit} className="w-full max-w-xs">
-        <label className="text-black font-['CPN'] font-bold mb-2 block text-center text-lg">
+        <label className="text-black font-['CPN'] font-bold mb-2 block text-left text-lg" style={{ textShadow: '2px 2px 6px white' }}>
           กรุณาใส่ชื่อผู้เล่น
         </label>
         <input
@@ -280,51 +279,22 @@ const EndScreen: React.FC<EndScreenProps> = ({ finalScore, playerName }) => {
     <div className="flex flex-col items-center justify-start h-full p-8 pt-20 text-center overflow-y-auto">
       
       {/* 1. Title */}
-      <div className="text-center text-white mb-4">
-        <h1 className="text-5xl font-['CPN'] font-bold tracking-wider text-pink-400 drop-shadow-md">YOUR SCORE</h1>
-        <p className="text-2xl font-['CPN'] mt-1 text-pink-300 drop-shadow-sm">{playerName}</p>
+      <div className="text-center text-white mb-8 mt-10">
+        <h1 className="text-5xl md:text-5x1 font-['Central Sang Bleu'] mb-8 text-[#f69994] ">YOU WIN!</h1>
+        <h1 className="text-3xl md:text-5x1 font-['Central Sang Bleu'] tracking-wider mb-8 text-[#f69994] ">Congratulations!</h1>
+        <h2 className="text-2xl font-['Central Sang Bleu'] font-bold mt-1 text-[#f69994] drop-shadow-sm">{playerName}</h2>
       </div>
 
-      {/* 2. Score Display (Flower Shape) */}
-      {/* We'll approximate the shape using CSS and SVG */}
+      {/* 2. Score Display */}
       <div className="relative w-64 h-64 flex items-center justify-center my-8">
-        {/* Background Flower Shape SVG */}
-        <svg viewBox="0 0 200 200" className="absolute w-full h-full drop-shadow-lg">
-          {/* Use a gradient for the pink/orange effect */}
-          <defs>
-            <radialGradient id="flowerGradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
-              <stop offset="0%" style={{ stopColor: '#FFD1A0', stopOpacity: 1 }} /> 
-              <stop offset="60%" style={{ stopColor: '#FF8A8A', stopOpacity: 1 }} /> 
-              <stop offset="100%" style={{ stopColor: '#F49C9B', stopOpacity: 0.9 }} /> 
-            </radialGradient>
-          </defs>
-          {/* Approximate flower shape path */}
-          <path 
-            fill="url(#flowerGradient)" 
-            d="M100,5 C140,5 160,30 175,50 C195,75 195,125 175,150 C160,170 140,195 100,195 C60,195 40,170 25,150 C5,125 5,75 25,50 C40,30 60,5 100,5 Z M100,20 C70,20 55,40 45,60 C30,85 30,115 45,140 C55,160 70,180 100,180 C130,180 145,160 155,140 C170,115 170,85 155,60 C145,40 130,20 100,20 Z" 
-            transform="rotate(45 100 100)" // Rotate to make it look less like a square
-          />
-        </svg>
+        <img src="/images/LogoCBS.png" alt="Score Frame" className="absolute w-full h-full" />
         {/* Score Text */}
-        <span className="relative text-7xl font-['CPN_Condensed'] font-bold text-white drop-shadow-lg z-10">
-          {finalScore.toString().padStart(4, '0')} {/* Pad score with leading zeros */}
-        </span>
-      </div>
-
-      {/* 3. The 1 Point Section */}
-      <div className="bg-black bg-opacity-80 text-white p-4 rounded-2xl w-full max-w-sm mt-8 shadow-xl flex items-center justify-between relative overflow-hidden">
-         {/* Red corner accent */}
-         <div className="absolute top-0 right-0 h-12 w-12 border-t-4 border-r-4 border-red-500 rounded-tr-2xl"></div>
-
-         <div className="flex items-baseline">
-            <span className="text-5xl font-['Central_Sang_Bleu'] font-light mr-1">The</span>
-            <span className="text-8xl font-['Central_Sang_Bleu'] font-light leading-none border-r-4 border-red-500 pr-3 mr-3">1</span>
-         </div>
-         <div className="text-right">
-            <p className="text-sm font-['CPN'] text-gray-300">คุณได้แต้ม</p>
-            <p className="text-6xl font-['CPN_Condensed'] font-bold text-white leading-none">780</p> {/* Placeholder Value */}
-            <p className="text-lg font-['CPN_Condensed'] font-bold text-white">Point</p>
-         </div>
+        <div className="relative z-10 flex flex-col items-center">
+          <p className="text-1xl font-['Central Sang Bleu'] mb-2 drop-shadow-sm">your score</p>
+          <span className="text-7xl font-['CPN_Condensed'] font-bold text-white drop-shadow-lg">
+            {finalScore.toString().padStart(3, '0')} {/* Pad score with leading zeros */}
+          </span>
+        </div>
       </div>
 
     </div>
@@ -333,28 +303,16 @@ const EndScreen: React.FC<EndScreenProps> = ({ finalScore, playerName }) => {
 
 const WaitingScreen: React.FC = () => {
   return (
-    <div className="flex flex-col items-center justify-start h-full p-4 pt-20 text-center relative">
+    <div className="flex flex-col items-center justify-center h-full p-4 text-center relative">
       {/* "Please wait a moment" text in a white rounded box */}
-      <div className="bg-white px-8 py-3 rounded-full shadow-lg mb-20"> {/* Increased margin-bottom */}
-        <h1 className="text-3xl font-['CPN'] font-bold text-black">กรุณารอสักครู่</h1>
+      <div className="bg-white px-8 py-3 rounded-full shadow-lg">
+        <h1 className="text-3xl font-['CPN'] font-bold text-black ">กรุณารอสักครู่</h1>
       </div>
 
-      {/* Custom Loading Spinner */}
-      {/* This will create the pink star-like shape with a white loading animation inside */}
-      <div className="relative w-48 h-48 flex items-center justify-center">
-        {/* Outer pink star shape */}
-        <svg viewBox="0 0 100 100" className="absolute w-full h-full text-[#F49C9B]">
-          <path
-            fill="currentColor"
-            d="M 50 0 L 60 40 L 100 50 L 60 60 L 50 100 L 40 60 L 0 50 L 40 40 Z"
-          />
-        </svg>
-        
-        {/* Inner white circle for the actual spinner */}
-        <div className="absolute w-28 h-28 bg-white rounded-full flex items-center justify-center">
-          {/* Tailwind CSS spinner */}
-          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-pink-500"></div>
-        </div>
+      {/* Radial Spinner with FrameLoading.png background */}
+      <div className="relative flex items-center justify-center w-48 h-48">
+        <img src="/images/FrameLoading.png" alt="Loading Frame" className="absolute w-full h-full" />
+        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-pink-500 z-10"></div>
       </div>
     </div>
   );
@@ -457,6 +415,11 @@ function App() {
   }, [uniqueUserId]);
 
   const renderContent = () => {
+    // บังคับให้แสดง EndScreen เพื่อดูตัวอย่างชั่วคราว
+    // return <ControllerScreen socket={socket.current} playerName="cd" />;
+    // return <SetupScreen onJoin={handleJoin} />;
+    return <WaitingScreen />;
+    // return <EndScreen finalScore={123} playerName="Test Player" />;
     // เพิ่มบรรทัดนี้:
     console.log("CLIENT: Rendering content for gameState:", gameState);
     switch (gameState) {
