@@ -415,30 +415,26 @@ function App() {
       }
     });
 
+    socket.current.on('gameOver', (data: { finalScore: number }) => {
+        // Log 1: ทันทีที่ event มาถึง
+        console.log(`CLIENT: <<< Received gameOver event. Score: ${data.finalScore}, Current gameState: ${gameState}`); // ใช้ state variable โดยตรง
+        setFinalScore(data.finalScore);
+        setGameState(GameState.ENDGAME);
+        // Log 2: ทันทีหลังตั้งค่า state (หมายเหตุ: state อาจยังไม่อัปเดตทันทีสำหรับ log ตรงนี้)
+        console.log(`CLIENT: >>> Called setGameState(ENDGAME)`);
+    });
+
     socket.current.on('gameAvailable', () => {
-      console.log(`CLIENT: --- Received gameAvailable event. Current gameState: ${gameState}`);
-        
-      // --- MODIFIED LOGIC ---
-      // Only switch to SETUP if we are explicitly in the WAITING_QUEUE state.
-      // Do NOT switch if we are in ENDGAME or any other state.
-      if (gameState === GameState.WAITING_QUEUE) {
+        // Log 3: เมื่อ gameAvailable มาถึง
+        console.log(`CLIENT: --- Received gameAvailable event. Current gameState: ${gameState}`); // ใช้ state variable โดยตรง
+
+        // --- LOGIC ที่แก้ไข ---
+        if (gameState === GameState.WAITING_QUEUE) {
           console.log(`CLIENT: --- Switching gameState to SETUP because it was WAITING_QUEUE`);
           setGameState(GameState.SETUP);
         } else {
-            // Log why we are *not* switching
             console.log(`CLIENT: --- NOT switching gameState from ${gameState} on gameAvailable.`);
         }
-    });
-
-    // Listen for server-initiated game over
-    socket.current.on('gameOver', (data: { finalScore: number }) => {
-        console.log(`Game over signal received from server. Final score: ${data.finalScore}`);
-        // เพิ่มบรรทัดนี้:
-        console.log(`CLIENT: Received gameOver event. Score: ${data.finalScore}, Current State: ${gameState}`);
-        setFinalScore(data.finalScore);
-        setGameState(GameState.ENDGAME);
-        // Log 2: ทันทีหลังตั้งค่า state (หมายเหตุ: state อาจยังไม่อัปเดตทันที)
-        console.log(`CLIENT: >>> Set gameState to ENDGAME`);
     });
 
     // Cleanup on component unmount
