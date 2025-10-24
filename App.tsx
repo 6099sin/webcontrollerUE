@@ -7,8 +7,8 @@ import './src/styles/background.css';
 // This is a global from the script tag in index.html
 declare const io: (uri: string) => Socket;
 
-// const SOCKET_SERVER_URL = 'https://ue-web-controller-712649324249.asia-southeast1.run.app';
-const SOCKET_SERVER_URL = 'http://localhost:3001';
+const SOCKET_SERVER_URL = 'https://ue-web-controller-712649324249.asia-southeast1.run.app';
+// const SOCKET_SERVER_URL = 'http://localhost:3001';
 
 
 
@@ -323,7 +323,7 @@ const EndScreen: React.FC<EndScreenProps> = ({ finalScore, playerName }) => {
       <div className="text-center text-white mb-8 mt-10">
         <h1 className="text-5xl md:text-5x1 font-['Central Sang Bleu'] mb-8 text-[#f69994] ">YOU WIN!</h1>
         <h1 className="text-3xl md:text-5x1 font-['Central Sang Bleu'] tracking-wider mb-14 text-[#f69994] ">Congratulations!</h1>
-        <h2 className="text-2xl font-['Central Sang Bleu'] mb-1 text-[#f69994] drop-shadow-sm">{playerName}</h2>
+        <h2 className="text-2xl font-['CPN'] mb-1 text-[#f69994] drop-shadow-sm">{playerName}</h2>
       </div>
 
       {/* 2. Score Display */}
